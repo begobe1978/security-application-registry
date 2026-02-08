@@ -1,0 +1,109 @@
+<!--
+  Copyright (C) 2026 Bernardo Gómez Bey
+  SPDX-License-Identifier: AGPL-3.0-or-later
+-->
+
+{% extends "base.html" %}
+{% block content %}
+
+<div class="card">
+  <h2 class="title">Listado {{ level }} — {{ sheet }}</h2>
+  <p class="subtitle">Vista por nivel (hoja del Excel). Incluye huérfanos y registros sin descendencia.</p>
+
+  <form method="get" action="/level/{{ level }}">
+    <input type="hidden" name="view" value="{{ view }}">
+    {% if parent %}
+      <input type="hidden" name="parent" value="{{ parent }}">
+    {% endif %}
+
+    <div class="row">
+      <div class="field" style="flex:1; min-width:260px;">
+        <label>Buscar (q)</label>
+        <input name="q" value="{{ q }}" placeholder="Buscar por cualquier campo...">
+      </div>
+
+      <div class="field" style="min-width:220px;">
+        <label>Status</label>
+        <input name="status" value="{{ status }}" placeholder="draft / active / deprecated...">
+      </div>
+
+      {% if has_parent %}
+      <div class="field" style="min-width:220px;">
+        <label>Solo huérfanos</label>
+        <select name="orphan">
+          <option value="" {% if orphan != "1" %}selected{% endif %}>No</option>
+          <option value="1" {% if orphan == "1" %}selected{% endif %}>Sí</option>
+        </select>
+      </div>
+      {% endif %}
+
+      <button class="btn btn-primary" type="submit">Filtrar</button>
+      <a class="btn btn-ghost" href="/level/{{ level }}?view={{ view }}{% if parent %}&parent={{ parent }}{% endif %}">Reset</a>
+    </div>
+  </form>
+</div>
+
+<br>
+
+<div class="card">
+  <div class="row" style="justify-content:space-between; align-items:center;">
+    <div class="muted">Registros: <b>{{ rows|length }}</b></div>
+    <div class="row">
+      {% if show_all %}
+        <a class="btn btn-ghost" href="/level/{{ level }}?q={{ q }}&status={{ status }}{% if parent %}&parent={{ parent }}{% endif %}&orphan={{ orphan }}&view=compact">Modo compacto</a>
+      {% else %}
+        <a class="btn btn-ghost" href="/level/{{ level }}?q={{ q }}&status={{ status }}{% if parent %}&parent={{ parent }}{% endif %}&orphan={{ orphan }}&view=full">Ver todas las columnas</a>
+      {% endif %}
+      <a class="btn btn-primary" href="/create/{{ level }}">Crear {{ level }}</a>
+    </div>
+  </div>
+</div>
+
+<br>
+
+<div class="table-wrap tall">
+  <table>
+    <thead>
+      <tr>
+        {% for c in columns %}
+          <th>{{ c }}</th>
+        {% endfor %}
+
+        {% if has_parent %}<th>orphan</th>{% endif %}
+        {% if level == "C1" %}<th>#C2</th>{% endif %}
+        {% if level == "C2" %}<th>#C3</th>{% endif %}
+        {% if level == "C3" %}<th>#C4</th>{% endif %}
+      </tr>
+    </thead>
+
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        {% for c in columns %}
+          {% if c == "human_id" %}
+            <td><a href="/record/{{ r.__human_id }}">{{ r[c] }}</a></td>
+          {% else %}
+            <td>{{ r[c] }}</td>
+          {% endif %}
+        {% endfor %}
+
+        {% if has_parent %}
+          <td>
+            {% if r.__orphan %}
+              <span class="badge b-error">orphan</span>
+            {% else %}
+              <span class="badge">ok</span>
+            {% endif %}
+          </td>
+        {% endif %}
+
+        {% if level == "C1" %}<td>{{ r.__cnt_c2 }}</td>{% endif %}
+        {% if level == "C2" %}<td>{{ r.__cnt_c3 }}</td>{% endif %}
+        {% if level == "C3" %}<td>{{ r.__cnt_c4 }}</td>{% endif %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% endblock %}

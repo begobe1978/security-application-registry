@@ -1,0 +1,41 @@
+<!--
+  Copyright (C) 2026 Bernardo Gómez Bey
+  SPDX-License-Identifier: AGPL-3.0-or-later
+-->
+
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <h2 class="title">Confirmar creación de campo</h2>
+  <p class="muted">
+    Vas a crear una <strong>nueva columna</strong> en el Excel para el nivel de este registro.
+    Esta acción no es habitual y puede afectar al modelo de datos.
+  </p>
+
+  <div class="kv" style="margin-top:14px;">
+    <div class="k">Registro</div>
+    <div class="v" style="font-family:var(--mono)">{{ human_id }}</div>
+
+    <div class="k">Nuevo campo</div>
+    <div class="v" style="font-family:var(--mono)">{{ field_name }}</div>
+
+    <div class="k">Valor inicial</div>
+    <div class="v"><code>{{ value }}</code></div>
+  </div>
+
+  <div class="help" style="margin-top:14px;">
+    <strong>Importante:</strong> si el campo ya existe (aunque sea con otro formato de nombre),
+    la operación fallará. Para modificar un campo existente, usa la sección de edición normal.
+  </div>
+
+  <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:16px; flex-wrap:wrap;">
+    <a class="btn btn-ghost" href="/record/{{ human_id }}">Cancelar</a>
+
+    <form method="post" action="/record/{{ human_id }}/add-field">
+      <input type="hidden" name="field_name" value="{{ field_name }}">
+      <input type="hidden" name="value" value="{{ value }}">
+      <button class="btn btn-primary" type="submit">Confirmar creación</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

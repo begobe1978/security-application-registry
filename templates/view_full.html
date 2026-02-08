@@ -1,0 +1,150 @@
+<!--
+  Copyright (C) 2026 Bernardo Gómez Bey
+  SPDX-License-Identifier: AGPL-3.0-or-later
+-->
+
+{% extends "base.html" %}
+{% block content %}
+
+<div class="row" style="justify-content:space-between; align-items:center; gap:12px;">
+  <h2 class="title" style="margin:0;">VIEW_Full</h2>
+  <a class="btn btn-primary" href="/create/C1">Crear C1 (Project)</a>
+</div>
+<p class="subtitle">
+Vista operativa (1 fila = 1 runtime). Incluye todos los campos de C1–C4 (compact).
+</p>
+
+<form method="get" class="card" style="margin-bottom:16px;">
+  <div class="row">
+    <div class="field" style="min-width:220px;">
+      <label>Búsqueda libre</label>
+      <input name="q" value="{{ q }}" placeholder="texto libre">
+    </div>
+
+    <div class="field" style="min-width:180px;">
+      <label>Exposure (C3)</label>
+      <input name="exposure" value="{{ exposure }}" placeholder="ej: internal">
+    </div>
+
+    <div class="field" style="min-width:220px;">
+      <label>Internet exposure (C4)</label>
+      <input name="internet_exposure" value="{{ internet_exposure }}" placeholder="ej: yes/no">
+    </div>
+
+    <div class="field" style="min-width:180px;">
+      <label>Status runtime (C4)</label>
+      <input name="status" value="{{ status }}" placeholder="active/draft/deprecated">
+    </div>
+
+    <button class="btn btn-primary" type="submit">Filtrar</button>
+    <a class="btn btn-ghost" href="/export/view-full.csv">Export CSV</a>
+  </div>
+</form>
+
+<style>
+  /* Colores muy suaves: NO dependen de ellos los límites */
+  th.grp { text-align:center; font-weight:900; font-size:11px; letter-spacing:.2px; }
+  th.grp.c1 { background:rgba(37,99,235,.06); }
+  th.grp.c2 { background:rgba(2,132,199,.06); }
+  th.grp.c3 { background:rgba(22,163,74,.06); }
+  th.grp.c4 { background:rgba(217,119,6,.07); }
+
+  /* Separadores de bloque: la señal REAL del límite */
+  .sep-left{
+    border-left: 3px solid rgba(15,23,42,.18) !important;
+  }
+  .sep-left-strong{
+    border-left: 3px solid rgba(15,23,42,.22) !important;
+  }
+
+  /* Refuerza visualmente la cabecera (línea inferior) */
+  thead tr:last-child th{
+    border-bottom: 2px solid rgba(15,23,42,.12);
+  }
+</style>
+
+<div class="table-wrap tall">
+  <table>
+    {% if rows %}
+      {% set all_cols = rows[0].keys() | list %}
+
+      {% set ns = namespace(c1=[], c2=[], c3=[], c4=[], other=[]) %}
+      {% for c in all_cols %}
+        {% if c.startswith("c1__") %}
+          {% set ns.c1 = ns.c1 + [c] %}
+        {% elif c.startswith("c2__") %}
+          {% set ns.c2 = ns.c2 + [c] %}
+        {% elif c.startswith("c3__") %}
+          {% set ns.c3 = ns.c3 + [c] %}
+        {% elif c.startswith("c4__") %}
+          {% set ns.c4 = ns.c4 + [c] %}
+        {% else %}
+          {% set ns.other = ns.other + [c] %}
+        {% endif %}
+      {% endfor %}
+
+      {% set cols = ns.c1 + ns.c2 + ns.c3 + ns.c4 + ns.other %}
+
+      <thead>
+        <tr>
+          {% if ns.c1|length > 0 %}
+            <th class="grp c1" colspan="{{ ns.c1|length }}">C1</th>
+          {% endif %}
+          {% if ns.c2|length > 0 %}
+            <th class="grp c2 sep-left-strong" colspan="{{ ns.c2|length }}">C2</th>
+          {% endif %}
+          {% if ns.c3|length > 0 %}
+            <th class="grp c3 sep-left-strong" colspan="{{ ns.c3|length }}">C3</th>
+          {% endif %}
+          {% if ns.c4|length > 0 %}
+            <th class="grp c4 sep-left-strong" colspan="{{ ns.c4|length }}">C4</th>
+          {% endif %}
+          {% if ns.other|length > 0 %}
+            <th class="grp sep-left-strong" colspan="{{ ns.other|length }}"></th>
+          {% endif %}
+        </tr>
+
+        <tr>
+          {% for c in cols %}
+            {% set is_first_c2 = (c == (ns.c2[0] if ns.c2|length>0 else "")) %}
+            {% set is_first_c3 = (c == (ns.c3[0] if ns.c3|length>0 else "")) %}
+            {% set is_first_c4 = (c == (ns.c4[0] if ns.c4|length>0 else "")) %}
+            {% set is_first_other = (c == (ns.other[0] if ns.other|length>0 else "")) %}
+
+            <th title="{{ c }}"
+                class="{% if is_first_c2 or is_first_c3 or is_first_c4 or is_first_other %}sep-left{% endif %}">
+              {{ c.replace("c1__", "").replace("c2__", "").replace("c3__", "").replace("c4__", "") }}
+            </th>
+          {% endfor %}
+        </tr>
+      </thead>
+
+      <tbody>
+        {% for r in rows %}
+          <tr>
+            {% for c in cols %}
+              {% set v = r[c] %}
+              <td title="{{ v }}"
+                  class="{% if c == (ns.c2[0] if ns.c2|length>0 else '') or
+                              c == (ns.c3[0] if ns.c3|length>0 else '') or
+                              c == (ns.c4[0] if ns.c4|length>0 else '') or
+                              c == (ns.other[0] if ns.other|length>0 else '') %}sep-left{% endif %}">
+                {% if c.endswith("__human_id") and v %}
+                  <a href="/record/{{ v }}" style="font-family:var(--mono); color:var(--accent); font-weight:900;">
+                    {{ v }}
+                  </a>
+                {% else %}
+                  {{ v }}
+                {% endif %}
+              </td>
+            {% endfor %}
+          </tr>
+        {% endfor %}
+      </tbody>
+    {% else %}
+      <tr><td>No hay datos</td></tr>
+    {% endif %}
+  </table>
+</div>
+
+{% endblock %}

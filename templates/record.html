@@ -1,0 +1,220 @@
+<!--
+  Copyright (C) 2026 Bernardo Gómez Bey
+  SPDX-License-Identifier: AGPL-3.0-or-later
+-->
+
+{% extends "base.html" %}
+{% block content %}
+<!-- record.html -->
+<div class="card">
+  <div style="display:flex; justify-content:space-between; gap:14px; flex-wrap:wrap;">
+    <div>
+      <h2 class="title">Ficha {{ level }} — <span style="font-family:var(--mono)">{{ human_id }}</span></h2>
+      <p class="subtitle">Origen: <b>{{ sheet }}</b> · Excel: <span style="font-family:var(--mono)">{{ path }}</span></p>
+    </div>
+
+    <div style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;">
+      <form method="post" action="/deprecate/{{ human_id }}">
+        <button class="btn btn-danger" type="submit">Deprecar</button>
+      </form>
+
+      <!-- Context navigation (lists by level) -->
+      <a class="btn btn-ghost" href="/level/{{ level }}">Ver lista {{ level }}</a>
+      {% if parent_ref %}
+        <a class="btn btn-ghost" href="/level/{{ level }}?parent={{ parent_ref }}">Ver hermanos</a>
+      {% endif %}
+      {% if level == "C1" %}
+        <a class="btn btn-ghost" href="/level/C2?parent={{ human_id }}">Ver C2 del proyecto</a>
+      {% elif level == "C2" %}
+        <a class="btn btn-ghost" href="/level/C3?parent={{ human_id }}">Ver C3 de la app</a>
+      {% elif level == "C3" %}
+        <a class="btn btn-ghost" href="/level/C4?parent={{ human_id }}">Ver C4 del componente</a>
+      {% endif %}
+      {% if level == "C1" %}
+        <a class="btn btn-primary" href="/create/C2?parent={{ human_id }}">Alta C2</a>
+      {% elif level == "C2" %}
+        <a class="btn btn-primary" href="/create/C3?parent={{ human_id }}">Alta C3</a>
+      {% elif level == "C3" %}
+        <a class="btn btn-primary" href="/create/C4?parent={{ human_id }}">Alta C4</a>
+      {% endif %}
+
+
+      <a class="btn btn-secondary" href="/view-full">Volver a Full View</a>
+      <a class="btn btn-secondary" href="/issues">Ver Issues</a>
+    </div>
+  </div>
+</div>
+
+{% if last_error %}
+<div class="errorbox" style="margin-top:12px;"><strong>Error:</strong> {{ last_error }}</div>
+{% endif %}
+
+<br>
+
+<div class="grid grid-3">
+  <div class="card">
+    <div class="title" style="font-size:14px;">Relaciones</div>
+
+    {% if parent_ref %}
+      <div class="muted">Parent</div>
+      <div style="margin:6px 0 12px 0;">
+        <a class="btn btn-ghost" href="/record/{{ parent_ref }}" style="font-family:var(--mono)">{{ parent_ref }}</a>
+      </div>
+    {% else %}
+      <div class="muted">Parent</div>
+      <div style="margin:6px 0 12px 0;">—</div>
+    {% endif %}
+
+    <div class="muted">Hijos inmediatos</div>
+    {% if children|length == 0 %}
+      <div style="margin-top:6px;">—</div>
+    {% else %}
+      <div style="margin-top:8px; display:flex; flex-direction:column; gap:8px;">
+        {% for c in children %}
+          <a class="btn btn-ghost" href="/record/{{ c.human_id }}" style="justify-content:space-between;">
+            <span style="font-family:var(--mono)">{{ c.human_id }}</span>
+            <span class="muted">{{ c.level }}</span>
+          </a>
+        {% endfor %}
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <div class="title" style="font-size:14px;">Resumen</div>
+    <div class="muted">Descendientes</div>
+
+    <div style="margin-top:10px; display:grid; gap:10px;">
+      <div class="kpi">
+        <div style="display:flex; justify-content:space-between; align-items:baseline;">
+          <div class="muted" style="font-weight:900;">C2</div>
+          <div style="font-weight:900;">{{ desc_counts["C2"] }}</div>
+        </div>
+      </div>
+      <div class="kpi">
+        <div style="display:flex; justify-content:space-between; align-items:baseline;">
+          <div class="muted" style="font-weight:900;">C3</div>
+          <div style="font-weight:900;">{{ desc_counts["C3"] }}</div>
+        </div>
+      </div>
+      <div class="kpi">
+        <div style="display:flex; justify-content:space-between; align-items:baseline;">
+          <div class="muted" style="font-weight:900;">C4</div>
+          <div style="font-weight:900;">{{ desc_counts["C4"] }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="title" style="font-size:14px;">Issues relacionados</div>
+    {% if issues|length == 0 %}
+      <div class="muted">No hay issues para este elemento (ni como parent_ref).</div>
+    {% else %}
+      <div style="margin-top:10px; display:grid; gap:10px;">
+        {% for i in issues %}
+          <div style="border:1px solid var(--border); border-radius:12px; padding:10px; background:rgba(255,255,255,.65);">
+            <div style="display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; align-items:center;">
+              <div style="display:flex; gap:8px; align-items:center;">
+                {% if i["severity"]=="error" %}
+                  <span class="badge b-error">ERROR</span>
+                {% elif i["severity"]=="warning" %}
+                  <span class="badge b-warning">WARNING</span>
+                {% else %}
+                  <span class="badge b-info">INFO</span>
+                {% endif %}
+                <span class="badge">{{ i["level"] }}</span>
+                <span class="badge">{{ i["issue_type"] }}</span>
+              </div>
+              <div class="muted" style="font-family:var(--mono); font-size:12px;">
+                {{ i["human_id"] }}{% if i["parent_ref"] %} ← {{ i["parent_ref"] }}{% endif %}
+              </div>
+            </div>
+            <div style="margin-top:8px;">{{ i["message"] }}</div>
+            {% if i["suggested_fix"] %}
+              <div class="muted" style="margin-top:6px;"><b>Fix:</b> {{ i["suggested_fix"] }}</div>
+            {% endif %}
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  </div>
+</div>
+
+<br>
+
+<div class="card">
+  <div class="title" style="font-size:14px;">Datos del registro</div>
+  <div class="muted">
+    Valores tal como están en la pestaña <b>{{ sheet }}</b>.
+    Puedes editar campos existentes directamente aquí (y guardar).
+  </div>
+  <br>
+
+  <form method="post" action="/record/{{ human_id }}/edit">
+    <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:10px;">
+      <span class="muted" style="font-size:12px;">
+        (Solo se actualizan columnas existentes. El <span style="font-family:var(--mono)">human_id</span> no es editable.)
+      </span>
+      <button class="btn btn-primary" type="submit" style="margin-left:auto;">Guardar cambios</button>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>field</th>
+            <th>value</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for k, v in record.items() %}
+            <tr class="{% if k in editable_fields %}row-editable{% else %}row-readonly{% endif %}">
+              <td style="font-family:var(--mono); color:var(--muted)">{{ k }}</td>
+              <td>
+                {% if k in editable_fields %}
+                  <input class="input-editable" name="{{ k }}" value="{{ v|e }}" />
+                {% else %}
+                  <input class="input-readonly" value="{{ v|e }}" disabled />
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </form>
+</div>
+
+<br>
+
+<div class="card">
+  <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-end; flex-wrap:wrap;">
+    <div>
+      <div class="title" style="font-size:14px;">Añadir campo nuevo</div>
+      <div class="muted" style="font-size:12px;">
+        Esta acción crea una <b>nueva columna</b> en el Excel. Se confirmará en un segundo paso.
+        Si el campo ya existe, se devolverá error.
+      </div>
+    </div>
+  </div>
+
+  <form method="post" action="/record/{{ human_id }}/add-field/preview" style="margin-top:12px;">
+    <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
+      <div style="min-width:220px; flex:1;">
+        <label class="muted" style="font-size:12px;">Nombre del campo</label>
+        <input class="input" name="field_name" placeholder="e.g. data_classification" required />
+      </div>
+
+      <div style="min-width:220px; flex:2;">
+        <label class="muted" style="font-size:12px;">Valor inicial</label>
+        <input class="input" name="value" placeholder="valor para este registro" />
+      </div>
+
+      <button class="btn btn-primary" type="submit" style="margin-left:auto;">Continuar</button>
+    </div>
+  </form>
+</div>
+
+
+{% endblock %}

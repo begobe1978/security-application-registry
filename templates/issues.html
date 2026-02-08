@@ -1,0 +1,125 @@
+<!--
+  Copyright (C) 2026 Bernardo Gómez Bey
+  SPDX-License-Identifier: AGPL-3.0-or-later
+-->
+
+{% extends "base.html" %}
+{% block content %}
+<!-- issues.html -->
+<div class="card">
+  <h2 class="title">ISSUES</h2>
+  <p class="subtitle">Errores y warnings detectados (huérfanos, campos requeridos, lookups inválidos, reglas).</p>
+
+  <form method="get" action="/issues">
+    <div class="row">
+      <div class="field" style="min-width:180px;">
+        <label>severity</label>
+        <select name="severity">
+          <option value="">(all)</option>
+          <option value="error" {% if severity=="error" %}selected{% endif %}>error</option>
+          <option value="warning" {% if severity=="warning" %}selected{% endif %}>warning</option>
+          <option value="info" {% if severity=="info" %}selected{% endif %}>info</option>
+        </select>
+      </div>
+
+      <div class="field" style="min-width:160px;">
+        <label>level</label>
+        <select name="level">
+          <option value="">(all)</option>
+          <option value="C1" {% if level=="C1" %}selected{% endif %}>C1</option>
+          <option value="C2" {% if level=="C2" %}selected{% endif %}>C2</option>
+          <option value="C3" {% if level=="C3" %}selected{% endif %}>C3</option>
+          <option value="C4" {% if level=="C4" %}selected{% endif %}>C4</option>
+        </select>
+      </div>
+
+      <div class="field" style="min-width:220px;">
+        <label>issue_type</label>
+        <select name="issue_type">
+          <option value="">(all)</option>
+          <option value="orphan" {% if issue_type=="orphan" %}selected{% endif %}>orphan</option>
+          <option value="missing_required" {% if issue_type=="missing_required" %}selected{% endif %}>missing_required</option>
+          <option value="invalid_lookup" {% if issue_type=="invalid_lookup" %}selected{% endif %}>invalid_lookup</option>
+          <option value="rule_violation" {% if issue_type=="rule_violation" %}selected{% endif %}>rule_violation</option>
+          <option value="duplicate_id" {% if issue_type=="duplicate_id" %}selected{% endif %}>duplicate_id</option>
+        </select>
+      </div>
+
+      <button class="btn btn-primary" type="submit">Apply</button>
+      <a class="btn btn-ghost" href="/export/issues.csv">Export CSV</a>
+    </div>
+  </form>
+
+  <br>
+  <div class="muted">Filas: <b style="color:var(--text)">{{rows|length}}</b></div>
+</div>
+
+{% if rows|length == 0 %}
+  <br>
+  <div class="card">
+    <div class="help">
+      <b>No hay issues.</b>
+      <div class="muted">O aún no hay filas que validar, o el modelo está coherente para los checks actuales.</div>
+    </div>
+  </div>
+{% else %}
+  <br>
+  <div class="table-wrap tall">
+    <table>
+      <thead>
+        <tr>
+          <th>severity</th>
+          <th>level</th>
+          <th>human_id</th>
+          <th>parent_ref</th>
+          <th>issue_type</th>
+          <th>message</th>
+          <th>suggested_fix</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+          <tr>
+            <td>
+              {% if r["severity"]=="error" %}
+                <span class="badge b-error">ERROR</span>
+              {% elif r["severity"]=="warning" %}
+                <span class="badge b-warning">WARNING</span>
+              {% else %}
+                <span class="badge b-info">INFO</span>
+              {% endif %}
+            </td>
+
+            <td><span class="badge">{{r["level"]}}</span></td>
+
+            <td style="font-family:var(--mono)">
+              {% if r["human_id"] %}
+                <a href="/record/{{ r['human_id'] }}" style="color:var(--accent); font-weight:900;">
+                  {{ r["human_id"] }}
+                </a>
+              {% else %}
+                —
+              {% endif %}
+            </td>
+
+            <td style="font-family:var(--mono)">
+              {% if r["parent_ref"] %}
+                <a href="/record/{{ r['parent_ref'] }}" style="color:var(--accent); font-weight:900;">
+                  {{ r["parent_ref"] }}
+                </a>
+              {% else %}
+                —
+              {% endif %}
+            </td>
+
+            <td><span class="badge">{{r["issue_type"]}}</span></td>
+            <td title="{{r['message']}}">{{r["message"]}}</td>
+            <td title="{{r['suggested_fix']}}">{{r["suggested_fix"]}}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endif %}
+
+{% endblock %}

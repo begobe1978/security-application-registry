@@ -1,0 +1,58 @@
+<!--
+  Copyright (C) 2026 Bernardo Gómez Bey
+  SPDX-License-Identifier: AGPL-3.0-or-later
+-->
+
+{% extends "base.html" %}
+{% block content %}
+<!-- create_form.html -->
+<div class="card">
+  <div style="display:flex; justify-content:space-between; gap:14px; flex-wrap:wrap;">
+    <div>
+      <h2 class="title">Alta {{ level }}</h2>
+      <p class="subtitle">Se creará un nuevo registro en <b>{{ sheet }}</b>.</p>
+    </div>
+    <div style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;">
+      <a class="btn btn-secondary" href="/view-full">Volver a Full View</a>
+      <a class="btn btn-secondary" href="/issues">Ver Issues</a>
+    </div>
+  </div>
+</div>
+
+{% if last_error %}
+<div class="errorbox" style="margin-top:12px;"><strong>Error:</strong> {{ last_error }}</div>
+{% endif %}
+
+<br>
+
+<div class="card">
+  <form method="post" action="/create/{{ level }}/preview">
+    <div class="grid grid-2">
+      {% for col in columns %}
+        <div>
+          <div class="muted" style="margin-bottom:6px;">
+            {{ col }}
+            {% if parent_col and col == parent_col %}
+              <span class="pill pill-warn" style="margin-left:6px;">obligatorio</span>
+            {% endif %}
+            {% if col == "name" %}
+              <span class="pill pill-warn" style="margin-left:6px;">obligatorio</span>
+            {% endif %}
+          </div>
+
+          {% if col == "description" %}
+            <textarea class="input" name="{{ col }}" rows="3" placeholder="{{ col }}">{{ prefill.get(col,"") }}</textarea>
+          {% else %}
+            <input class="input" name="{{ col }}" value="{{ prefill.get(col,"") }}" placeholder="{{ col }}">
+          {% endif %}
+        </div>
+      {% endfor %}
+    </div>
+
+    <div style="display:flex; justify-content:flex-end; margin-top:14px;">
+      <button class="btn btn-primary" type="submit">Continuar</button>
+    </div>
+  </form>
+</div>
+
+{% endblock %}

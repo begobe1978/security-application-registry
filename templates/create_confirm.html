@@ -1,0 +1,54 @@
+<!--
+  Copyright (C) 2026 Bernardo Gómez Bey
+  SPDX-License-Identifier: AGPL-3.0-or-later
+-->
+
+{% extends "base.html" %}
+{% block content %}
+<!-- create_confirm.html -->
+<div class="card">
+  <div style="display:flex; justify-content:space-between; gap:14px; flex-wrap:wrap;">
+    <div>
+      <h2 class="title">Confirmar alta {{ level }}</h2>
+      <p class="subtitle">ID propuesto: <span style="font-family:var(--mono)"><b>{{ next_id }}</b></span> · Pestaña: <b>{{ sheet }}</b></p>
+      <p class="muted" style="margin-top:6px;">Este paso escribirá en el Excel y regenerará VIEW_Full e ISSUES (con backup automático).</p>
+    </div>
+    <div style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;">
+      <a class="btn btn-ghost" href="/create/{{ level }}">Volver</a>
+    </div>
+  </div>
+</div>
+
+<br>
+
+<div class="card">
+  <div class="title" style="font-size:14px;">Campos</div>
+  <div style="margin-top:10px;">
+    <table class="table">
+      <thead>
+        <tr><th>Campo</th><th>Valor</th></tr>
+      </thead>
+      <tbody>
+        {% for k, v in fields.items() %}
+          <tr>
+            <td style="font-family:var(--mono);">{{ k }}</td>
+            <td>{{ v }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <form method="post" action="/create/{{ level }}" style="margin-top:14px;">
+    {% for k, v in fields.items() %}
+      <input type="hidden" name="{{ k }}" value="{{ v }}">
+    {% endfor %}
+
+    <div style="display:flex; justify-content:flex-end; gap:10px;">
+      <a class="btn btn-ghost" href="/create/{{ level }}">Cancelar</a>
+      <button class="btn btn-primary" type="submit">Confirmar creación</button>
+    </div>
+  </form>
+</div>
+
+{% endblock %}

@@ -1,0 +1,112 @@
+<!--
+  Copyright (C) 2026 Bernardo Gómez Bey
+  SPDX-License-Identifier: AGPL-3.0-or-later
+-->
+
+{% extends "base.html" %}
+{% block content %}
+
+
+<!-- index.html -->
+<div class="card">
+  <h2 class="title">Registro SAR</h2>
+  <p class="subtitle">Selecciona un Excel y regenera la vista operativa (VIEW_Full) y la lista de incoherencias (ISSUES).</p>
+
+  {% if last_error %}
+    <div class="errorbox">
+      <b>Error:</b> {{ last_error }}
+    </div>
+    <br>
+  {% endif %}
+
+  <div class="help">
+    <b>Tip:</b> si hay huérfanos, no entran en <span class="muted">VIEW_Full</span> por política; se reportan en <span class="muted">ISSUES</span>.
+  </div>
+
+  <br>
+
+  <form method="post" action="/regenerate" enctype="multipart/form-data">
+    <div class="row">
+      <div class="field" style="flex:1; min-width:320px;">
+        <label>Seleccionar registry.xlsx (recomendado)</label>
+        <input type="file" name="file" accept=".xlsx">
+      </div>
+
+      <div class="field" style="flex:1; min-width:320px;">
+        <label>O usar ruta manual (opcional)</label>
+        <input name="path" value="{{path}}" placeholder="C:\ruta\registry.xlsx">
+      </div>
+
+      <button class="btn btn-primary" type="submit">Regenerate</button>
+    </div>
+  </form>
+  {% if last_data_registry %}
+    <div class="row" style="margin-top:10px; align-items:center;">
+      <div class="muted" style="flex:1;">
+        Último registry encontrado en <span class="mono">/data</span>: <span class="mono">{{ last_data_registry }}</span>
+      </div>
+      <a class="btn btn-secondary" href="/open-last">Abrir último</a>
+    </div>
+  {% else %}
+    <div class="row" style="margin-top:10px; align-items:center;">
+      <div class="muted" style="flex:1;">
+        No se ha encontrado ningún <span class="mono">.xlsx</span> en <span class="mono">/data</span>.
+      </div>
+      <a class="btn btn-secondary" href="/open-last">Abrir último</a>
+    </div>
+  {% endif %}
+
+
+  {% if last_regen %}
+    <p class="muted" style="margin-top:10px;">Última regeneración: <b>{{ last_regen }}</b></p>
+  {% endif %}
+</div>
+
+{% if has_data %}
+  <br>
+
+  <div class="grid grid-3">
+    <div class="kpi">
+      <div style="display:flex; justify-content:space-between; gap:12px; align-items:baseline;">
+        <div class="muted" style="font-weight:900;">Runtimes en VIEW_Full</div>
+        <div style="font-size:18px; font-weight:900;">{{ view_rows }}</div>
+      </div>
+    </div>
+
+    <div class="kpi">
+      <div style="display:flex; justify-content:space-between; gap:12px; align-items:baseline;">
+        <div class="muted" style="font-weight:900;">Issues (error)</div>
+        <div style="font-size:18px; font-weight:900;">{{ issues_errors }}</div>
+      </div>
+    </div>
+
+    <div class="kpi">
+      <div style="display:flex; justify-content:space-between; gap:12px; align-items:baseline;">
+        <div class="muted" style="font-weight:900;">Issues (warning)</div>
+        <div style="font-size:18px; font-weight:900;">{{ issues_warnings }}</div>
+      </div>
+    </div>
+  </div>
+
+  <br>
+
+  <div class="card">
+    <div class="row" style="justify-content:space-between;">
+      <div>
+        <div class="muted">Archivo activo</div>
+        <div style="font-family:var(--mono); font-size:12px;">{{ path }}</div>
+      </div>
+      <div class="row">
+        <a class="btn btn-primary" href="/create/C1">Crear C1 (Project)</a>
+        <a class="btn btn-ghost" href="/level/C1">Ver C1</a>
+        <a class="btn btn-ghost" href="/level/C2">Ver C2</a>
+        <a class="btn btn-ghost" href="/level/C3">Ver C3</a>
+        <a class="btn btn-ghost" href="/level/C4">Ver C4</a>
+        <a class="btn btn-secondary" href="/view-full">Abrir Full View</a>
+        <a class="btn btn-secondary" href="/issues">Abrir Issues</a>
+      </div>
+    </div>
+  </div>
+{% endif %}
+
+{% endblock %}
