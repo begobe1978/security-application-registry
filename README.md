@@ -5,7 +5,15 @@
 
 SAR (Security Application Registry) es un registro operativo de aplicaciones orientado a **Application Security** y **Secure Architecture**. Su objetivo es hacer el riesgo **visible, derivable y accionable** a partir de un modelo estructurado, con **Excel como “source of truth”** y un motor en Python para validar, calcular vistas y detectar inconsistencias.
 
-> Autor / Maintainer: Bernardo Gómez Bey  
+> Autor / Maintainer: Bernardo Gómez Bey
+
+## Contexto y alcance
+
+SAR no pretende sustituir herramientas de arquitectura empresarial, CMDBs ni plataformas de gobierno.
+
+Proporciona una **visión operativa y específica** orientada a desarrollo y ciberseguridad, basada en cómo el software se desarrolla, se despliega y se ejecuta realmente. En lugar de modelar arquitecturas ideales o exhaustivas, SAR modela **proyectos, aplicaciones, componentes de código y sus contextos de ejecución concretos**, que es donde se materializan los cambios y el riesgo.
+
+El objetivo es reducir fricción entre desarrollo, seguridad y herramientas corporativas, capturando únicamente información que los equipos pueden mantener de forma realista, pero con suficiente estructura para servir como input fiable a plataformas más amplias.
 
 ---
 
