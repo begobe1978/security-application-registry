@@ -173,7 +173,21 @@
               <td style="font-family:var(--mono); color:var(--muted)">{{ k }}</td>
               <td>
                 {% if k in editable_fields %}
-                  <input class="input-editable" name="{{ k }}" value="{{ v|e }}" />
+                  {% if lookups.get(k) %}
+                    {% set cur = (v|string) %}
+                    <select class="input-editable" name="{{ k }}">
+                      <option value="">—</option>
+                      {# Keep current value visible even if it's not in LOOKUPS #}
+                      {% if cur and (lookups.get(k) | map(attribute='value') | list) and (cur not in (lookups.get(k) | map(attribute='value') | list)) %}
+                        <option value="{{ cur|e }}" selected>{{ cur|e }} — (actual)</option>
+                      {% endif %}
+                      {% for opt in lookups.get(k, []) %}
+                        <option value="{{ opt.value }}" {% if cur == opt.value %}selected{% endif %}>{{ opt.value }}{% if opt.label and opt.label != opt.value %} — {{ opt.label }}{% endif %}</option>
+                      {% endfor %}
+                    </select>
+                  {% else %}
+                    <input class="input-editable" name="{{ k }}" value="{{ v|e }}" />
+                  {% endif %}
                 {% else %}
                   <input class="input-readonly" value="{{ v|e }}" disabled />
                 {% endif %}

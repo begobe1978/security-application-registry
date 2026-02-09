@@ -27,6 +27,16 @@
         <input name="status" value="{{ status }}" placeholder="draft / active / deprecated...">
       </div>
 
+      <div class="field" style="min-width:220px;">
+        <label>Vulnerabilities detected</label>
+        <select name="vulnerabilities_detected">
+          <option value="" {% if not vulnerabilities_detected %}selected{% endif %}>—</option>
+          <option value="yes" {% if vulnerabilities_detected=='yes' %}selected{% endif %}>yes</option>
+          <option value="no" {% if vulnerabilities_detected=='no' %}selected{% endif %}>no</option>
+          <option value="unknown" {% if vulnerabilities_detected=='unknown' %}selected{% endif %}>unknown</option>
+        </select>
+      </div>
+
       {% if has_parent %}
       <div class="field" style="min-width:220px;">
         <label>Solo huérfanos</label>
@@ -50,9 +60,9 @@
     <div class="muted">Registros: <b>{{ rows|length }}</b></div>
     <div class="row">
       {% if show_all %}
-        <a class="btn btn-ghost" href="/level/{{ level }}?q={{ q }}&status={{ status }}{% if parent %}&parent={{ parent }}{% endif %}&orphan={{ orphan }}&view=compact">Modo compacto</a>
+        <a class="btn btn-ghost" href="/level/{{ level }}?q={{ q }}&status={{ status }}&vulnerabilities_detected={{ vulnerabilities_detected }}{% if parent %}&parent={{ parent }}{% endif %}&orphan={{ orphan }}&view=compact">Modo compacto</a>
       {% else %}
-        <a class="btn btn-ghost" href="/level/{{ level }}?q={{ q }}&status={{ status }}{% if parent %}&parent={{ parent }}{% endif %}&orphan={{ orphan }}&view=full">Ver todas las columnas</a>
+        <a class="btn btn-ghost" href="/level/{{ level }}?q={{ q }}&status={{ status }}&vulnerabilities_detected={{ vulnerabilities_detected }}{% if parent %}&parent={{ parent }}{% endif %}&orphan={{ orphan }}&view=full">Ver todas las columnas</a>
       {% endif %}
       <a class="btn btn-primary" href="/create/{{ level }}">Crear {{ level }}</a>
     </div>

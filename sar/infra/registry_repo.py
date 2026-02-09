@@ -222,6 +222,61 @@ def read_sheet(path: str, sheet: str) -> pd.DataFrame:
     return normalize_columns(df)
 
 
+def read_lookups(path: str) -> pd.DataFrame:
+    """Read LOOKUPS sheet into a normalised dataframe.
+
+    Expected columns (after normalisation):
+      - lookup_name
+      - lookup_value
+      - level (e.g. ALL / C1 / C2 / C3 / C4)
+      - description (optional)
+    """
+    df = pd.read_excel(path, sheet_name="LOOKUPS", dtype=str).fillna("")
+    return normalize_columns(df)
+
+
+def lookup_options_by_level(path: str, level: str) -> dict[str, list[dict[str, str]]]:
+    """Return dropdown options for a given level, keyed by field name.
+
+    Convention: lookup_name == field name.
+    """
+    lvl = str(level or "").strip().upper()
+    df = read_lookups(path)
+    if df.empty:
+        base: dict[str, list[dict[str, str]]] = {}
+    else:
+        df["level"] = df.get("level", "").astype(str).str.upper().str.strip()
+        df["lookup_name"] = df.get("lookup_name", "").astype(str).str.strip()
+        df["lookup_value"] = df.get("lookup_value", "").astype(str).str.strip()
+        df["description"] = df.get("description", "").astype(str).str.strip()
+
+        scoped = df[(df["level"].isin(["ALL", lvl])) & (df["lookup_name"] != "") & (df["lookup_value"] != "")]
+
+        base = {}
+        for name, g in scoped.groupby("lookup_name"):
+            opts = []
+            for _, r in g.iterrows():
+                opts.append({"value": r["lookup_value"], "label": r.get("description", "") or r["lookup_value"]})
+            base[str(name)] = opts
+
+    # Backwards-compatible aliases / common column naming variants.
+    # Example: registry uses 'environments' column while LOOKUPS may define 'environment'.
+    if "environment" in base and "environments" not in base:
+        base["environments"] = list(base["environment"])
+    if "environments" in base and "environment" not in base:
+        base["environment"] = list(base["environments"])
+
+    # Hard-coded safety enums not necessarily present in LOOKUPS
+    if "vulnerabilities_detected" not in base:
+        base["vulnerabilities_detected"] = [
+            {"value": "yes", "label": "yes"},
+            {"value": "no", "label": "no"},
+            {"value": "unknown", "label": "unknown"},
+        ]
+
+    return base
+
+
 def backup_registry(path: str) -> str:
     """Create a timestamped .bak copy next to the registry file."""
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")

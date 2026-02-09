@@ -21,6 +21,10 @@ def update_record_existing_fields(*, path: str, human_id: str, fields: Dict[str,
     if not meta:
         raise ValueError(f"human_id '{human_id}' no reconocido (prefijo no soportado).")
 
+    # vulnerabilities_detected is derived in C1/C2 and must not be manually editable
+    if meta.get("level") in ("C1", "C2") and "vulnerabilities_detected" in fields:
+        raise ValueError("'vulnerabilities_detected' no es editable en C1/C2 (se hereda de C3/C4).")
+
     # Safety first
     backup_registry(path)
     update_fields_existing(path, meta["sheet"], human_id, fields)
@@ -45,7 +49,7 @@ def add_new_field(*, path: str, human_id: str, field_name: str, value: Any):
 
     return regenerate_views(path)
 
-def create_record(*, path: str, level: str, fields: Dict[str, Any]) -> tuple[str, Any, Any]:
+def create_record(*, path: str, level: str, fields: Dict[str, Any]) -> tuple[str, Any, Any, Any]:
     """Create a new record for a given level (C1-C4) in the Excel registry.
 
     - Generates a new human_id for the level.
@@ -57,6 +61,10 @@ def create_record(*, path: str, level: str, fields: Dict[str, Any]) -> tuple[str
     meta = meta_for_level(level)
     if not meta:
         raise ValueError(f"Nivel '{level}' no reconocido. Usa C1, C2, C3 o C4.")
+
+    # vulnerabilities_detected is only writable in C3/C4
+    if meta.get("level") in ("C1", "C2") and "vulnerabilities_detected" in fields:
+        raise ValueError("'vulnerabilities_detected' no es editable en C1/C2 (se hereda de C3/C4).")
 
     sheet = meta["sheet"]
     prefix = meta["prefix"]
@@ -90,5 +98,5 @@ def create_record(*, path: str, level: str, fields: Dict[str, Any]) -> tuple[str
     backup_registry(path)
     append_row_existing_columns(path, sheet, row)
 
-    view_full, issues = regenerate_views(path)
-    return new_hid, view_full, issues
+    view_full, issues, views_by_level = regenerate_views(path)
+    return new_hid, view_full, issues, views_by_level

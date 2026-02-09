@@ -15,7 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from sar.core.utils import canon, df_to_csv_stream, first_existing_col, safe_count
-from sar.infra.registry_repo import read_sheet
+from sar.infra.registry_repo import read_sheet, lookup_options_by_level
 from sar.services.compute_service import regenerate_views
 from sar.services.crud_service import update_record_existing_fields, add_new_field, create_record
 from sar.core.mapping import meta_for_level
@@ -41,6 +41,7 @@ STATE = {
     "path": "",
     "view_full": pd.DataFrame(),
     "issues": pd.DataFrame(),
+    "views_by_level": {},
     "last_error": "",
     "last_regen": "",
 }
@@ -112,9 +113,10 @@ def open_last():
         if not p:
             raise ValueError("No se ha encontrado ningún .xlsx en /data.")
         STATE["path"] = p
-        view_full, issues = regenerate_views(STATE["path"])
+        view_full, issues, views_by_level = regenerate_views(STATE["path"])
         STATE["view_full"] = view_full
         STATE["issues"] = issues
+        STATE["views_by_level"] = views_by_level
         STATE["last_regen"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         return RedirectResponse(url="/view-full", status_code=303)
     except Exception as e:
@@ -151,9 +153,10 @@ async def regenerate(
             chosen_path = p
 
         STATE["path"] = chosen_path
-        view_full, issues = regenerate_views(STATE["path"])
+        view_full, issues, views_by_level = regenerate_views(STATE["path"])
         STATE["view_full"] = view_full
         STATE["issues"] = issues
+        STATE["views_by_level"] = views_by_level
         STATE["last_regen"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         return RedirectResponse(url="/view-full", status_code=303)
@@ -169,6 +172,10 @@ def view_full(
     exposure: str = "",
     internet_exposure: str = "",
     status: str = "",
+    vuln_c1: str = "",
+    vuln_c2: str = "",
+    vuln_c3: str = "",
+    vuln_c4: str = "",
 ):
     # Base DF (prefijado, dinámico)
     df = STATE["view_full"].copy() if STATE["view_full"] is not None else pd.DataFrame()
@@ -196,6 +203,17 @@ def view_full(
         if status and status_col:
             df = df[df[status_col] == status]
 
+        # vulnerabilities_detected filters (by level)
+        def _apply_vuln_filter(param: str, colname: str):
+            nonlocal df
+            if param and colname in df.columns:
+                df = df[df[colname] == param]
+
+        _apply_vuln_filter(vuln_c1, "c1__vulnerabilities_detected")
+        _apply_vuln_filter(vuln_c2, "c2__vulnerabilities_detected")
+        _apply_vuln_filter(vuln_c3, "c3__vulnerabilities_detected")
+        _apply_vuln_filter(vuln_c4, "c4__vulnerabilities_detected")
+
         # Nota: anteriormente se añadían aliases sin prefijo (exposure/internet_exposure/runtime_status)
         # para compatibilidad con templates antiguos. Ya no es necesario y generaba columnas redundantes
         # al final de la tabla en VIEW_Full.
@@ -210,6 +228,10 @@ def view_full(
             "exposure": exposure,
             "internet_exposure": internet_exposure,
             "status": status,
+            "vuln_c1": vuln_c1,
+            "vuln_c2": vuln_c2,
+            "vuln_c3": vuln_c3,
+            "vuln_c4": vuln_c4,
         },
     )
 
@@ -256,6 +278,7 @@ def list_level(
     parent: str = "",  # filter by parent ref when applicable
     orphan: str = "",  # "1" => only orphans
     view: str = "compact",  # compact|full
+    vulnerabilities_detected: str = "",
 ):
     """List all records for a given level (C1..C4).
 
@@ -275,7 +298,10 @@ def list_level(
     parent_col = meta.get("parent_col")  # None for C1
     level_code = meta["level"]
 
-    df = read_sheet(path, sheet)
+    # Use derived view from engine (never raw Excel)
+    df = (STATE.get("views_by_level", {}) or {}).get(level_code)
+    if df is None:
+        df = read_sheet(path, sheet)
 
     # Stable/common columns (if present)
     status_col = first_existing_col(df, "status")
@@ -327,6 +353,9 @@ def list_level(
 
         if status and status_col:
             out = out[out[status_col].astype(str) == status]
+
+        if vulnerabilities_detected and "vulnerabilities_detected" in out.columns:
+            out = out[out["vulnerabilities_detected"].astype(str) == vulnerabilities_detected]
 
         # Optional: filter by explicit parent reference (contextual navigation)
         if parent and parent_col and parent_col in out.columns:
@@ -413,6 +442,7 @@ def list_level(
             "has_parent": bool(parent_col),
             "view": view,
             "show_all": show_all,
+            "vulnerabilities_detected": vulnerabilities_detected,
         },
     )
 
@@ -455,9 +485,22 @@ def record(request: Request, human_id: str):
     # Issues for this id
     issues_rows = issues_for(STATE["issues"], human_id)
 
-    # Editable fields (MVP): allow editing of existing sheet columns, but never the identifier.
+    # Overlay derived fields for display (e.g., inherited vulnerabilities_detected)
+    display_record = dict(row)
+    ddf = (STATE.get("views_by_level", {}) or {}).get(level)
+    if ddf is not None and not ddf.empty and "human_id" in ddf.columns:
+        match = ddf[ddf["human_id"].astype(str).map(canon) == canon(human_id)]
+        if not match.empty and "vulnerabilities_detected" in match.columns:
+            display_record["vulnerabilities_detected"] = str(match.iloc[0].get("vulnerabilities_detected", ""))
+
+    # Editable fields: allow editing of existing sheet columns, but never the identifier.
     non_editable = {"human_id"}
-    editable_fields = [k for k in row.keys() if k not in non_editable]
+    # vulnerabilities_detected is only editable in C3/C4
+    if level in ("C1", "C2"):
+        non_editable.add("vulnerabilities_detected")
+    editable_fields = [k for k in display_record.keys() if k not in non_editable]
+
+    lookups = lookup_options_by_level(path, level)
 
     return templates.TemplateResponse(
         "record.html",
@@ -467,13 +510,14 @@ def record(request: Request, human_id: str):
             "level": level,
             "sheet": sheet,
             "human_id": canon(human_id),
-            "record": row,
+            "record": display_record,
             "parent_ref": parent_ref,
             "parent_level": parent_level,
             "children": children,
             "desc_counts": descendant_counts,
             "issues": issues_rows,
             "editable_fields": editable_fields,
+            "lookups": lookups,
             "last_error": STATE.get("last_error",""),
         },
     )
@@ -501,13 +545,14 @@ async def edit_record_existing_fields(request: Request, human_id: str):
         if not fields:
             return RedirectResponse(url=f"/record/{canon(human_id)}", status_code=303)
 
-        view_full, issues = update_record_existing_fields(
+        view_full, issues, views_by_level = update_record_existing_fields(
             path=STATE["path"],
             human_id=human_id,
             fields=fields,
         )
         STATE["view_full"] = view_full
         STATE["issues"] = issues
+        STATE["views_by_level"] = views_by_level
         STATE["last_regen"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         STATE["last_error"] = ""
         return RedirectResponse(url=f"/record/{canon(human_id)}", status_code=303)
@@ -566,7 +611,7 @@ async def confirm_add_field(request: Request, human_id: str):
             STATE["last_error"] = "El nombre del campo no puede estar vacío."
             return RedirectResponse(url=f"/record/{canon(human_id)}", status_code=303)
 
-        view_full, issues = add_new_field(
+        view_full, issues, views_by_level = add_new_field(
             path=STATE["path"],
             human_id=human_id,
             field_name=field_name,
@@ -574,6 +619,7 @@ async def confirm_add_field(request: Request, human_id: str):
         )
         STATE["view_full"] = view_full
         STATE["issues"] = issues
+        STATE["views_by_level"] = views_by_level
         STATE["last_regen"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         STATE["last_error"] = ""
         return RedirectResponse(url=f"/record/{canon(human_id)}", status_code=303)
@@ -610,6 +656,8 @@ def create_form(request: Request, level: str, parent: str = ""):
     # Defaults
     prefill.setdefault("status", "draft")
 
+    lookups = lookup_options_by_level(STATE["path"], meta["level"])
+
     return templates.TemplateResponse(
         "create_form.html",
         {
@@ -619,6 +667,7 @@ def create_form(request: Request, level: str, parent: str = ""):
             "columns": cols,
             "parent_col": parent_col or "",
             "prefill": prefill,
+            "lookups": lookups,
             "last_error": STATE.get("last_error", ""),
         },
     )
@@ -694,9 +743,10 @@ async def create_confirm(request: Request, level: str):
         form = await request.form()
         fields = {str(k): ("" if v is None else str(v)).strip() for k, v in form.items()}
 
-        new_id, view_full, issues = create_record(path=STATE["path"], level=meta["level"], fields=fields)
+        new_id, view_full, issues, views_by_level = create_record(path=STATE["path"], level=meta["level"], fields=fields)
         STATE["view_full"] = view_full
         STATE["issues"] = issues
+        STATE["views_by_level"] = views_by_level
         STATE["last_regen"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         STATE["last_error"] = ""
 
@@ -727,11 +777,12 @@ def deprecate(human_id: str):
         return RedirectResponse(url="/", status_code=303)
 
     try:
-        view_full, issues = update_record_existing_fields(
+        view_full, issues, views_by_level = update_record_existing_fields(
             path=STATE["path"], human_id=human_id, fields={"status": "deprecated"}
         )
         STATE["view_full"] = view_full
         STATE["issues"] = issues
+        STATE["views_by_level"] = views_by_level
         STATE["last_regen"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         STATE["last_error"] = ""
 
@@ -759,13 +810,14 @@ def update_existing_fields(
         if not field.strip():
             raise ValueError("El campo (field) no puede estar vacío.")
 
-        view_full, issues = update_record_existing_fields(
+        view_full, issues, views_by_level = update_record_existing_fields(
             path=STATE["path"],
             human_id=human_id,
             fields={field: value},
         )
         STATE["view_full"] = view_full
         STATE["issues"] = issues
+        STATE["views_by_level"] = views_by_level
         STATE["last_regen"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         STATE["last_error"] = ""
         return RedirectResponse(url=f"/record/{canon(human_id)}", status_code=303)

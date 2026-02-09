@@ -42,6 +42,13 @@
 
           {% if col == "description" %}
             <textarea class="input" name="{{ col }}" rows="3" placeholder="{{ col }}">{{ prefill.get(col,"") }}</textarea>
+          {% elif lookups.get(col) %}
+            <select class="input" name="{{ col }}">
+              <option value="">—</option>
+              {% for opt in lookups.get(col, []) %}
+                <option value="{{ opt.value }}" {% if prefill.get(col,"") == opt.value %}selected{% endif %}>{{ opt.value }}{% if opt.label and opt.label != opt.value %} — {{ opt.label }}{% endif %}</option>
+              {% endfor %}
+            </select>
           {% else %}
             <input class="input" name="{{ col }}" value="{{ prefill.get(col,"") }}" placeholder="{{ col }}">
           {% endif %}
