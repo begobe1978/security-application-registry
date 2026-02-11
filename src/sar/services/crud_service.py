@@ -5,10 +5,47 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from sar.infra.registry_repo import backup_registry, update_fields_existing, add_new_field_column, append_row_existing_columns, generate_next_human_id
+from sar.infra.registry_repo import (
+    backup_registry,
+    update_fields_existing,
+    add_new_field_column,
+    append_row_existing_columns,
+    generate_next_human_id,
+    read_sheet,
+)
 from sar.services.compute_service import regenerate_views
 from sar.services.record_service import detect_level_meta
 from sar.core.mapping import meta_for_level
+from sar.core.utils import canon
+from sar.services.record_service import get_row_by_human_id
+
+
+PARENT_LEVEL = {"C2": "C1", "C3": "C2", "C4": "C3"}
+
+
+def _validate_parent_ref_exists(*, path: str, child_level: str, parent_ref: str) -> None:
+    """Ensure parent_ref exists and is of the correct level for the child."""
+    cl = str(child_level or "").strip().upper()
+    pl = PARENT_LEVEL.get(cl)
+    if not pl:
+        return
+
+    pref = str(parent_ref or "").strip()
+    if not pref:
+        raise ValueError("El parent_id no puede estar vacío.")
+
+    # Check prefix/level first (fast feedback)
+    pm = detect_level_meta(pref)
+    if not pm or pm.get("level") != pl:
+        raise ValueError(f"Parent '{pref}' no es válido para {cl} (se espera un {pl}).")
+
+    # Check existence in the correct sheet
+    pmeta = meta_for_level(pl)
+    if not pmeta:
+        raise ValueError(f"No se pudo resolver el nivel parent '{pl}'.")
+    pdf = read_sheet(path, pmeta["sheet"])
+    if get_row_by_human_id(pdf, pref) is None:
+        raise ValueError(f"Parent '{canon(pref)}' no existe en '{pmeta['sheet']}'.")
 
 
 def update_record_existing_fields(*, path: str, human_id: str, fields: Dict[str, Any]):
@@ -24,6 +61,11 @@ def update_record_existing_fields(*, path: str, human_id: str, fields: Dict[str,
     # vulnerabilities_detected is derived in C1/C2 and must not be manually editable
     if meta.get("level") in ("C1", "C2") and "vulnerabilities_detected" in fields:
         raise ValueError("'vulnerabilities_detected' no es editable en C1/C2 (se hereda de C3/C4).")
+
+    # If the parent field is being updated, validate it exists (prevents typos).
+    parent_col = meta.get("parent_col")
+    if parent_col and parent_col in fields:
+        _validate_parent_ref_exists(path=path, child_level=meta.get("level", ""), parent_ref=str(fields.get(parent_col, "")))
 
     # Safety first
     backup_registry(path)
@@ -79,6 +121,7 @@ def create_record(*, path: str, level: str, fields: Dict[str, Any]) -> tuple[str
         parent_ref = str(fields.get(parent_col, "") or "").strip()
         if not parent_ref:
             raise ValueError(f"El campo '{parent_col}' es obligatorio para {meta['level']}.")
+        _validate_parent_ref_exists(path=path, child_level=meta.get("level", ""), parent_ref=parent_ref)
     else:
         parent_ref = ""
 

@@ -7,7 +7,10 @@ from typing import Tuple, Dict
 
 import pandas as pd
 
-from engine import compute
+# NOTE:
+# `engine` lives inside the installable `sar` package (sar/engine.py).
+# Using an absolute package import makes execution robust regardless of CWD.
+from sar.engine import compute
 
 
 def regenerate_views(path: str) -> Tuple[pd.DataFrame, pd.DataFrame, Dict[str, pd.DataFrame]]:

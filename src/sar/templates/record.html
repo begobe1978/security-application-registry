@@ -143,6 +143,44 @@
 
 <br>
 
+<div class="card" id="diagram">
+  <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
+    <div>
+      <div class="title" style="font-size:14px;">Diagrama de relaciones</div>
+      <div class="muted" style="font-size:12px; margin-top:4px;">
+        Vista automática (Mermaid) de la relación entre este elemento y sus padres/hijos.
+      </div>
+    </div>
+    <a class="btn btn-secondary" href="#diagram">Ver</a>
+  </div>
+
+  <br>
+
+  {% if diagram_meta and diagram_meta.get('truncated') %}
+    <div class="alert" style="margin-bottom:10px;">
+      ⚠️ <b>Diagrama truncado</b>: se alcanzó el límite de {{ diagram_meta.get('max_nodes') }} nodos.
+      Puedes ampliar el límite con <span style="font-family:var(--mono)">?max_nodes=500</span> (ojo: puede ir lento).
+    </div>
+  {% endif %}
+
+  {% if mermaid_code %}
+    <div class="table-wrap" style="padding:8px; max-height:70vh;">
+      <div class="mermaid">{{ mermaid_code | safe }}</div>
+    </div>
+  {% else %}
+    <div class="muted" style="font-size:12px;">
+      {{ mermaid_error or "(Diagrama no disponible)" }}
+    </div>
+  {% endif %}
+
+  <details style="margin-top:12px;">
+    <summary class="muted" style="cursor:pointer; font-size:12px;">Mostrar código Mermaid</summary>
+    <pre style="white-space:pre-wrap; font-size:12px; padding:10px; border:1px solid var(--border); border-radius:10px; background:#fff; overflow:auto;">{{ mermaid_code }}</pre>
+  </details>
+</div>
+
+<br>
+
 <div class="card">
   <div class="title" style="font-size:14px;">Datos del registro</div>
   <div class="muted">
@@ -173,7 +211,15 @@
               <td style="font-family:var(--mono); color:var(--muted)">{{ k }}</td>
               <td>
                 {% if k in editable_fields %}
-                  {% if lookups.get(k) %}
+                  {% if parent_col and k == parent_col %}
+                    <div class="ac" data-ac="1" data-child-level="{{ level }}">
+                      <input class="input-editable" name="{{ k }}" value="{{ v|e }}" placeholder="Buscar {{ k }}…" autocomplete="off" data-ac-input="1" />
+                      <div class="ac-results" data-ac-results="1" style="display:none;"></div>
+                      <div class="muted" style="font-size:11px; margin-top:6px;">
+                        Escribe para buscar (por ID o nombre) y selecciona una opción.
+                      </div>
+                    </div>
+                  {% elif lookups.get(k) %}
                     {% set cur = (v|string) %}
                     <select class="input-editable" name="{{ k }}">
                       <option value="">—</option>

@@ -40,7 +40,15 @@
             {% endif %}
           </div>
 
-          {% if col == "description" %}
+          {% if parent_col and col == parent_col %}
+            <div class="ac" data-ac="1" data-child-level="{{ level }}">
+              <input class="input" name="{{ col }}" value="{{ prefill.get(col,"") }}" placeholder="Buscar {{ col }}…" autocomplete="off" data-ac-input="1">
+              <div class="ac-results" data-ac-results="1" style="display:none;"></div>
+              <div class="muted" style="font-size:11px; margin-top:6px;">
+                Escribe para buscar (por ID o nombre) y selecciona una opción.
+              </div>
+            </div>
+          {% elif col == "description" %}
             <textarea class="input" name="{{ col }}" rows="3" placeholder="{{ col }}">{{ prefill.get(col,"") }}</textarea>
           {% elif lookups.get(col) %}
             <select class="input" name="{{ col }}">

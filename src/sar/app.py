@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pandas as pd
 from fastapi import FastAPI, File, Form, Request, UploadFile
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -29,13 +29,17 @@ from sar.services.record_service import (
     list_descendants_counts,
 )
 
+from sar.services.diagram_service import build_record_diagram
+
 app = FastAPI()
 
-app.mount("/static", StaticFiles(directory="static"), name="static")
-templates = Jinja2Templates(directory="templates")
+BASE_DIR = Path(__file__).resolve().parent
 
-DATA_DIR = Path("data")
-DATA_DIR.mkdir(exist_ok=True)
+app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
+templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
+
+DATA_DIR = Path(os.getenv("SAR_DATA_DIR", "data")).resolve()
+DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 STATE = {
     "path": "",
@@ -45,6 +49,9 @@ STATE = {
     "last_error": "",
     "last_regen": "",
 }
+
+# Parent chain (child level -> parent level)
+PARENT_LEVEL = {"C2": "C1", "C3": "C2", "C4": "C3"}
 
 
 def _ensure_registry_loaded() -> bool:
@@ -72,6 +79,56 @@ def _latest_xlsx_in_data_dir() -> str:
 
     newest = max(candidates, key=sort_key)
     return str(newest.resolve())
+
+
+def _search_parent_candidates(*, child_level: str, q: str, limit: int = 20):
+    """Search existing parents for a given child level.
+
+    Results are returned from in-memory views when available; falls back to reading the
+    corresponding sheet if needed.
+    """
+    cl = str(child_level or "").strip().upper()
+    parent_level = PARENT_LEVEL.get(cl, "")
+    if not parent_level:
+        return []
+
+    df = (STATE.get("views_by_level", {}) or {}).get(parent_level)
+    if df is None or df.empty or "human_id" not in df.columns:
+        pm = meta_for_level(parent_level)
+        if not pm:
+            return []
+        df = read_sheet(STATE["path"], pm["sheet"])
+
+    # Ensure columns exist
+    if "name" not in df.columns:
+        df = df.copy()
+        df["name"] = ""
+
+    q_raw = (q or "").strip()
+    if not q_raw:
+        return []
+
+    ql = q_raw.lower()
+    qcanon = canon(q_raw)
+
+    tmp = df[["human_id", "name"]].copy()
+    tmp["__hid"] = tmp["human_id"].astype(str).map(canon)
+    tmp["__name"] = tmp["name"].astype(str).str.lower()
+    hit = tmp[(tmp["__hid"].str.contains(qcanon)) | (tmp["__name"].str.contains(ql))]
+
+    # Prefer exact-ish matches first
+    hit["__rank"] = 2
+    hit.loc[hit["__hid"] == qcanon, "__rank"] = 0
+    hit.loc[hit["__hid"].str.startswith(qcanon), "__rank"] = 1
+    hit = hit.sort_values(by=["__rank", "__hid"]).head(max(1, min(int(limit or 20), 50)))
+
+    out = []
+    for _, r in hit.iterrows():
+        hid = str(r.get("human_id", "") or "").strip()
+        name = str(r.get("name", "") or "").strip()
+        label = hid if not name else f"{hid} — {name}"
+        out.append({"human_id": hid, "label": label})
+    return out
 
 
 # ------------------ Routes ------------------
@@ -234,6 +291,24 @@ def view_full(
             "vuln_c4": vuln_c4,
         },
     )
+
+
+@app.get("/api/parents/search")
+def api_search_parents(child_level: str = "", q: str = "", limit: int = 20):
+    """Autocomplete endpoint for parent ids.
+
+    - child_level: level being edited/created (C2/C3/C4)
+    - q: user query (partial human_id or name)
+    """
+    if not _ensure_registry_loaded():
+        return JSONResponse({"items": []})
+
+    try:
+        items = _search_parent_candidates(child_level=child_level, q=q, limit=limit)
+        return JSONResponse({"items": items})
+    except Exception:
+        # Never break the form because of autocomplete.
+        return JSONResponse({"items": []})
 
 
 @app.get("/issues", response_class=HTMLResponse)
@@ -502,6 +577,33 @@ def record(request: Request, human_id: str):
 
     lookups = lookup_options_by_level(path, level)
 
+    # Mermaid diagram for relationships (rendered client-side)
+    mermaid_code = ""
+    mermaid_error = ""
+    diagram_meta = {"truncated": False, "node_count": 0, "max_nodes": 200}
+
+    # Optional safety limit (protect browser). Can be overridden via ?max_nodes=500
+    try:
+        max_nodes = int(request.query_params.get("max_nodes", "200"))
+    except Exception:
+        max_nodes = 200
+
+    try:
+        res = build_record_diagram(path, human_id, max_nodes=max_nodes)
+        if isinstance(res, tuple) and len(res) == 2:
+            mermaid_code, diagram_meta = res
+        else:
+            mermaid_code = res or ""
+            diagram_meta = {"truncated": False, "node_count": 0, "max_nodes": max_nodes}
+
+        if not mermaid_code:
+            mermaid_error = "No se pudo generar diagrama para este registro (sin relaciones o datos incompletos)."
+    except Exception as e:
+        # Diagram is a UI enhancement; never block the page if it fails.
+        mermaid_error = f"Error generando diagrama: {type(e).__name__}"
+        mermaid_code = ""
+        diagram_meta = {"truncated": False, "node_count": 0, "max_nodes": max_nodes}
+
     return templates.TemplateResponse(
         "record.html",
         {
@@ -513,11 +615,15 @@ def record(request: Request, human_id: str):
             "record": display_record,
             "parent_ref": parent_ref,
             "parent_level": parent_level,
+            "parent_col": parent_col or "",
             "children": children,
             "desc_counts": descendant_counts,
             "issues": issues_rows,
             "editable_fields": editable_fields,
             "lookups": lookups,
+            "mermaid_code": mermaid_code,
+            "diagram_meta": diagram_meta,
+            "mermaid_error": mermaid_error,
             "last_error": STATE.get("last_error",""),
         },
     )

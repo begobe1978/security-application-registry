@@ -390,7 +390,49 @@ th, td{
     .table-wrap.tall{
       max-height:calc(100vh - 280px);
     }
-  </style>
+  
+    .alert{
+      background:#FFF7ED;
+      border:1px solid #FDBA74;
+      color:#7C2D12;
+      padding:10px 12px;
+      border-radius:var(--radius);
+      font-size:12px;
+    }
+
+    /* =========================
+       Autocomplete (parent_id)
+       ========================= */
+    .ac{ position:relative; }
+    .ac-results{
+      position:absolute;
+      top:100%;
+      left:0;
+      right:0;
+      margin-top:6px;
+      background:#fff;
+      border:1px solid var(--border);
+      border-radius:12px;
+      box-shadow:var(--shadow);
+      max-height:260px;
+      overflow:auto;
+      z-index:50;
+    }
+    .ac-opt{
+      display:block;
+      width:100%;
+      text-align:left;
+      border:0;
+      background:transparent;
+      padding:10px 12px;
+      cursor:pointer;
+      font-size:12px;
+      font-weight:800;
+    }
+    .ac-opt:hover{ background:#F6F8FB; }
+    .ac-opt small{ display:block; font-weight:700; color:var(--muted); margin-top:2px; }
+
+</style>
 </head>
 
 <body>
@@ -418,5 +460,85 @@ th, td{
   <div class="container">
     {% block content %}{% endblock %}
   </div>
+
+  <!-- Mermaid (used in /record/{human_id} diagrams). Safe to load globally. -->
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
+    mermaid.initialize({ startOnLoad: true, securityLevel: "loose" });
+  </script>
+
+  <script>
+    // Simple server-side autocomplete for parent ids.
+    // Looks for containers with: <div class="ac" data-ac="1" data-child-level="C3">...
+    (function(){
+      const debounce = (fn, wait) => {
+        let t = null;
+        return (...args) => {
+          if (t) window.clearTimeout(t);
+          t = window.setTimeout(() => fn(...args), wait);
+        };
+      };
+
+      function initOne(container){
+        const input = container.querySelector('[data-ac-input]');
+        const results = container.querySelector('[data-ac-results]');
+        const childLevel = (container.getAttribute('data-child-level') || '').trim();
+        if (!input || !results || !childLevel) return;
+
+        let lastQuery = '';
+
+        const hide = () => {
+          results.style.display = 'none';
+          results.innerHTML = '';
+        };
+
+        const showItems = (items) => {
+          if (!items || items.length === 0){ hide(); return; }
+          results.innerHTML = items.map(it => {
+            const label = String(it.label || it.human_id || '');
+            const hid = String(it.human_id || '');
+            return `<button type="button" class="ac-opt" data-hid="${hid.replace(/"/g,'&quot;')}">${label.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</button>`;
+          }).join('');
+          results.style.display = 'block';
+        };
+
+        const fetchItems = debounce(async () => {
+          const q = (input.value || '').trim();
+          if (!q){ hide(); return; }
+          if (q === lastQuery) return;
+          lastQuery = q;
+          try {
+            const url = `/api/parents/search?child_level=${encodeURIComponent(childLevel)}&q=${encodeURIComponent(q)}&limit=20`;
+            const resp = await fetch(url, { headers: { 'Accept': 'application/json' } });
+            const data = await resp.json();
+            showItems((data && data.items) ? data.items : []);
+          } catch(e){
+            hide();
+          }
+        }, 150);
+
+        input.addEventListener('input', fetchItems);
+
+        results.addEventListener('click', (ev) => {
+          const btn = ev.target.closest('button[data-hid]');
+          if (!btn) return;
+          input.value = btn.getAttribute('data-hid') || '';
+          hide();
+          input.focus();
+        });
+
+        // Hide on blur (with tiny delay so click works)
+        input.addEventListener('blur', () => window.setTimeout(hide, 180));
+        input.addEventListener('focus', () => {
+          const q = (input.value || '').trim();
+          if (q) fetchItems();
+        });
+      }
+
+      window.addEventListener('DOMContentLoaded', () => {
+        document.querySelectorAll('[data-ac="1"]').forEach(initOne);
+      });
+    })();
+  </script>
 </body>
 </html>

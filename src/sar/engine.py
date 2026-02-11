@@ -32,13 +32,21 @@ class Issue:
     suggested_fix: str
 
 
-def _split_multivalue(value: str) -> List[str]:
+def _split_multivalue(value: Any) -> List[str]:
+    """Split a cell that may contain 1 or multiple values.
+
+    Supports separators: comma, semicolon, pipe.
+    Always returns a list of tokens (0..n).
+    """
     if value is None or (isinstance(value, float) and pd.isna(value)):
         return []
     s = str(value).strip()
     if not s:
         return []
+    # normalize separators to comma
+    s = s.replace(";", ",").replace("|", ",")
     return [x.strip() for x in s.split(",") if x.strip()]
+
 
 
 def _canon_vuln(value: Any) -> str:
@@ -89,22 +97,202 @@ def load_registry_xlsx(path: str) -> Dict[str, pd.DataFrame]:
     missing = [s for s in REQUIRED_SHEETS if s not in xls.sheet_names]
     if missing:
         raise ValueError(f"Faltan pestañas requeridas: {missing}")
-    data = {name: pd.read_excel(xls, sheet_name=name, dtype=str).fillna("") for name in REQUIRED_SHEETS}
+    data: Dict[str, pd.DataFrame] = {}
+    for name in REQUIRED_SHEETS:
+        df = pd.read_excel(xls, sheet_name=name, dtype=str).fillna("")
+        # Normalize column headers to avoid false "missing field" issues caused by
+        # trailing spaces / non-breaking spaces / accidental whitespace in Excel.
+        df.columns = [str(c).strip() for c in df.columns]
+        data[name] = df
     return data
 
 
-def parse_lookups(df_lookups: pd.DataFrame) -> Dict[str, set]:
-    # expected columns: lookup_name | lookup_value | level | description
+def parse_lookups(df_lookups: pd.DataFrame) -> Dict[str, Dict[str, Any]]:
+    """Parse LOOKUPS sheet.
+
+    Expected columns:
+      - lookup_name
+      - lookup_value
+      - level (optional; defaults to 'ALL')
+
+    Returns:
+      {lookup_name: {"values": set[str], "levels": set[str]}}
+    """
+    if df_lookups is None or df_lookups.empty:
+        return {}
+
     req_cols = {"lookup_name", "lookup_value"}
     if not req_cols.issubset(set(df_lookups.columns)):
         return {}
-    lookups: Dict[str, set] = {}
-    for _, r in df_lookups.iterrows():
-        ln = str(r.get("lookup_name", "")).strip()
-        lv = str(r.get("lookup_value", "")).strip()
-        if ln and lv:
-            lookups.setdefault(ln, set()).add(lv)
-    return lookups
+
+    tmp = df_lookups.fillna("").copy()
+    tmp["lookup_name"] = tmp.get("lookup_name", "").astype(str).str.strip()
+    tmp["lookup_value"] = tmp.get("lookup_value", "").astype(str).str.strip()
+    tmp["level"] = tmp.get("level", "ALL").astype(str).str.upper().str.strip()
+    tmp.loc[tmp["level"] == "", "level"] = "ALL"
+
+    out: Dict[str, Dict[str, Any]] = {}
+    for _, r in tmp.iterrows():
+        name = str(r.get("lookup_name", "")).strip()
+        val = str(r.get("lookup_value", "")).strip()
+        lvl = str(r.get("level", "ALL")).strip().upper() or "ALL"
+        if not name or not val:
+            continue
+        out.setdefault(name, {"values": set(), "levels": set()})
+        out[name]["values"].add(val)
+        out[name]["levels"].add(lvl)
+    return out
+
+
+def _lookup_names_for_level(lookups: Dict[str, Dict[str, Any]], level: str) -> List[str]:
+    lvl = str(level or "").strip().upper()
+    names = []
+    for name, meta in lookups.items():
+        lvls = set(meta.get("levels", set()))
+        if "ALL" in lvls or lvl in lvls:
+            names.append(name)
+    return sorted(set(names))
+
+
+def _validate_lookup_tokens(
+    df: pd.DataFrame,
+    level: str,
+    field: str,
+    allowed: set,
+    issues: List[Issue],
+):
+    """Validate a field against allowed values.
+
+    We support single or multi-value transparently:
+      - if the cell contains separators (, ; |) we treat it as multi
+      - otherwise it's a single token
+    """
+    if df is None or df.empty or field not in df.columns or "human_id" not in df.columns:
+        return
+    for _, r in df.iterrows():
+        hid = str(r.get("human_id", "")).strip()
+        raw = r.get(field, "")
+        values = _split_multivalue(raw)
+        # if it doesn't look like multi, _split_multivalue returns [token] for non-empty
+        for v in values:
+            if v and v not in allowed:
+                issues.append(
+                    Issue(
+                        issue_id=f"{level}-LOOKUP-{hid}-{field}-{v}",
+                        severity="error",
+                        level=level,
+                        human_id=hid,
+                        parent_ref="",
+                        issue_type="invalid_lookup",
+                        message=f"Valor inválido en {field}: '{v}' (lookup {field})",
+                        suggested_fix=f"Usar uno de: {', '.join(sorted(allowed))}",
+                    )
+                )
+
+
+def validate_lookups_for_level(
+    df: pd.DataFrame,
+    level: str,
+    lookups: Dict[str, Dict[str, Any]],
+    issues: List[Issue],
+):
+    """Validate all lookup-backed fields for a level.
+
+    Convention (Opción A): lookup_name == field name.
+    Only validates fields that actually exist in the sheet.
+    """
+    for name in _lookup_names_for_level(lookups, level):
+        if df is None or df.empty:
+            continue
+        if name not in df.columns:
+            continue
+        allowed = set(lookups.get(name, {}).get("values", set()))
+        if not allowed:
+            continue
+        _validate_lookup_tokens(df, level, name, allowed, issues)
+
+
+def validate_config_lookup_fields_exist(
+    views_by_level: Dict[str, pd.DataFrame],
+    lookups: Dict[str, Dict[str, Any]],
+    issues: List[Issue],
+):
+    """Raise issues when LOOKUPS defines a field for a level but the column doesn't exist.
+
+    - For level-specific lookups (C1..C4): if the column is missing in that level -> issue
+    - For ALL: we don't warn per-level (too noisy)
+    """
+    if not lookups:
+        return
+    for name, meta in lookups.items():
+        lvls = set(meta.get("levels", set()))
+        for lvl in sorted(lvls):
+            if lvl == "ALL":
+                continue
+            if lvl not in views_by_level:
+                continue
+            df = views_by_level[lvl]
+            if df is None:
+                continue
+            if name not in df.columns:
+                issues.append(
+                    Issue(
+                        issue_id=f"{lvl}-LOOKUP-MISSINGFIELD-{name}",
+                        severity="warning",
+                        level=lvl,
+                        human_id="",
+                        parent_ref="",
+                        issue_type="config_missing_field",
+                        message=f"LOOKUPS define '{name}' para {lvl}, pero la columna no existe en la pestaña.",
+                        suggested_fix=f"Crear la columna '{name}' en {lvl} o eliminar/ajustar LOOKUPS.",
+                    )
+                )
+
+
+def validate_config_rules_fields_exist(
+    rules_df: pd.DataFrame,
+    views_by_level: Dict[str, pd.DataFrame],
+    issues: List[Issue],
+):
+    """Raise issues when RULES references a field that doesn't exist in the target level.
+
+    These rules are skipped during evaluation to avoid false positives.
+    """
+    if rules_df is None or rules_df.empty:
+        return
+    required = {"rule_id", "level", "group_id", "logic", "when_field", "op", "value", "severity", "message", "suggested_fix"}
+    if not required.issubset(set(rules_df.columns)):
+        return
+
+    tmp = rules_df.fillna("").copy()
+    tmp["level"] = tmp.get("level", "").astype(str).str.upper().str.strip()
+    tmp["rule_id"] = tmp.get("rule_id", "").astype(str).str.strip()
+    tmp["when_field"] = tmp.get("when_field", "").astype(str).str.strip()
+
+    for _, r in tmp.iterrows():
+        lvl = str(r.get("level", "")).upper().strip()
+        rid = str(r.get("rule_id", "")).strip()
+        wf = str(r.get("when_field", "")).strip()
+        if not lvl or not rid or not wf or wf == "_rel":
+            continue
+        if lvl not in views_by_level:
+            continue
+        df = views_by_level[lvl]
+        if df is None or df.empty:
+            continue
+        if wf not in df.columns:
+            issues.append(
+                Issue(
+                    issue_id=f"{lvl}-RULE-MISSINGFIELD-{rid}-{wf}",
+                    severity="warning",
+                    level=lvl,
+                    human_id="",
+                    parent_ref="",
+                    issue_type="config_missing_field",
+                    message=f"RULES ({rid}) referencia campo '{wf}' en {lvl}, pero la columna no existe.",
+                    suggested_fix=f"Crear la columna '{wf}' en {lvl} o ajustar la regla {rid}.",
+                )
+            )
 
 
 def validate_required(df: pd.DataFrame, level: str, required_cols: List[str], issues: List[Issue]):
@@ -267,18 +455,39 @@ def normalize_and_derive_vulnerabilities(
     c4: pd.DataFrame,
     issues: List[Issue],
 ) -> Dict[str, pd.DataFrame]:
-    """Normalize vulnerabilities_detected in C3/C4 and compute inheritance for C2/C1.
+    """Normalize and (optionally) derive 'vulnerabilities_detected' across levels.
 
-    Semantics:
-      - C3/C4: factual value from tools, editable. We normalize to yes|no|unknown.
-      - C2/C1: inherited (non editable):
-          if any descendant yes -> yes
-          else if any descendant unknown -> unknown
-          else no
+    Behavior is Excel-driven:
+      - We ONLY operate on levels where the column already exists.
+      - If the field is missing from the model, we raise an ISSUE and skip its calculation.
+
+    Semantics (when the column exists):
+      - C3/C4: factual value, normalized to yes|no|unknown.
+      - C2/C1: inherited:
+          any descendant yes -> yes
+          else any descendant unknown -> unknown
+          else no (only if there are descendants); otherwise unknown
     """
+    has_any = any(
+        (df is not None and not df.empty and VULN_FIELD in df.columns)
+        for df in (c1, c2, c3, c4)
+    )
+    if not has_any:
+        issues.append(
+            Issue(
+                issue_id="CFG-VULN-MISSINGFIELD",
+                severity="warning",
+                level="ALL",
+                human_id="",
+                parent_ref="",
+                issue_type="config_missing_field",
+                message=f"El motor soporta 'vulnerabilities_detected', pero el campo no existe en ninguna pestaña. Se omite su cálculo.",
+                suggested_fix=f"Crear la columna 'vulnerabilities_detected' en C3/C4 (y opcionalmente en C2/C1 para herencia) o eliminar su uso.",
+            )
+        )
+        return {"C1": c1, "C2": c2, "C3": c3, "C4": c4}
 
-    c1o, c2o, c3o, c4o = (_ensure_vuln_col(c1), _ensure_vuln_col(c2), _ensure_vuln_col(c3), _ensure_vuln_col(c4))
-    c1n, c2n, c3n, c4n = c1o.copy(), c2o.copy(), c3o.copy(), c4o.copy()
+    c1n, c2n, c3n, c4n = c1.copy(), c2.copy(), c3.copy(), c4.copy()
 
     # normalize keys
     for df in (c1n, c2n, c3n, c4n):
@@ -291,7 +500,7 @@ def normalize_and_derive_vulnerabilities(
     if "c3_human_id" in c4n.columns:
         c4n["c3_human_id"] = c4n["c3_human_id"].astype(str).str.strip()
 
-    # C3/C4: normalize and flag invalids
+    # C3/C4: normalize and flag invalids (only if column exists)
     for level, df in (("C3", c3n), ("C4", c4n)):
         if VULN_FIELD not in df.columns:
             continue
@@ -321,50 +530,62 @@ def normalize_and_derive_vulnerabilities(
     c3_to_c2 = {}
     if "human_id" in c3n.columns and "c2_human_id" in c3n.columns:
         c3_to_c2 = dict(zip(c3n["human_id"].astype(str), c3n["c2_human_id"].astype(str)))
-    c2_to_c1 = {}
-    if "human_id" in c2n.columns and "c1_human_id" in c2n.columns:
-        c2_to_c1 = dict(zip(c2n["human_id"].astype(str), c2n["c1_human_id"].astype(str)))
+    c4_to_c3 = {}
+    if "human_id" in c4n.columns and "c3_human_id" in c4n.columns:
+        c4_to_c3 = dict(zip(c4n["human_id"].astype(str), c4n["c3_human_id"].astype(str)))
 
-    # Gather vuln signals from descendants
-    vuln_by_c2: Dict[str, List[str]] = {}
-    vuln_by_c1: Dict[str, List[str]] = {}
-
-    def _add_to_maps(c2_id: str, v: str):
-        if c2_id:
-            vuln_by_c2.setdefault(c2_id, []).append(v)
-            c1_id = c2_to_c1.get(c2_id, "")
-            if c1_id:
-                vuln_by_c1.setdefault(c1_id, []).append(v)
-
-    # From C3
-    if "human_id" in c3n.columns and VULN_FIELD in c3n.columns:
-        for _, r in c3n.iterrows():
-            c2_id = str(r.get("c2_human_id", "")).strip()
-            v = str(r.get(VULN_FIELD, "")).strip().lower() or "unknown"
-            _add_to_maps(c2_id, v)
-
-    # From C4
-    if "human_id" in c4n.columns and VULN_FIELD in c4n.columns:
+    # Collect vuln values per C3 (from C4)
+    vuln_by_c3: Dict[str, List[str]] = {}
+    if VULN_FIELD in c4n.columns and "human_id" in c4n.columns:
         for _, r in c4n.iterrows():
-            c3_id = str(r.get("c3_human_id", "")).strip()
-            c2_id = c3_to_c2.get(c3_id, "")
-            v = str(r.get(VULN_FIELD, "")).strip().lower() or "unknown"
-            _add_to_maps(str(c2_id).strip(), v)
+            cid = str(r.get("human_id", "")).strip()
+            p = str(c4_to_c3.get(cid, "")).strip()
+            if not p:
+                continue
+            vuln_by_c3.setdefault(p, []).append(str(r.get(VULN_FIELD, "")).strip())
 
-    # C2/C1: compute inherited
-    if "human_id" in c2n.columns:
-        c2n[VULN_FIELD] = [
-            _derive_vuln_from_children(vuln_by_c2.get(str(h).strip(), []))
-            for h in c2n["human_id"].astype(str)
-        ]
+    # Collect vuln values per C2 (from C3)
+    vuln_by_c2: Dict[str, List[str]] = {}
+    if VULN_FIELD in c3n.columns and "human_id" in c3n.columns:
+        for _, r in c3n.iterrows():
+            cid = str(r.get("human_id", "")).strip()
+            p = str(c3_to_c2.get(cid, "")).strip()
+            if not p:
+                continue
+            vuln_by_c2.setdefault(p, []).append(str(r.get(VULN_FIELD, "")).strip())
 
-    if "human_id" in c1n.columns:
-        c1n[VULN_FIELD] = [
-            _derive_vuln_from_children(vuln_by_c1.get(str(h).strip(), []))
-            for h in c1n["human_id"].astype(str)
-        ]
+    # If C3 has the column, we can infer from C4 for blanks
+    if VULN_FIELD in c3n.columns and vuln_by_c3:
+        inferred = []
+        for _, r in c3n.iterrows():
+            hid = str(r.get("human_id", "")).strip()
+            cur = str(r.get(VULN_FIELD, "")).strip()
+            inferred.append(cur or _derive_vuln_from_children(vuln_by_c3.get(hid, [])))
+        c3n[VULN_FIELD] = inferred
 
-    return {"C1": c1n.fillna(""), "C2": c2n.fillna(""), "C3": c3n.fillna(""), "C4": c4n.fillna("")}
+    # Inherit to C2 only if C2 has the column
+    if VULN_FIELD in c2n.columns:
+        inherited = []
+        for _, r in c2n.iterrows():
+            hid = str(r.get("human_id", "")).strip()
+            inherited.append(_derive_vuln_from_children(vuln_by_c2.get(hid, [])))
+        c2n[VULN_FIELD] = inherited
+
+    # Inherit to C1 only if C1 has the column (requires C2 inheritance too)
+    if VULN_FIELD in c1n.columns and VULN_FIELD in c2n.columns and "c1_human_id" in c2n.columns:
+        by_c1: Dict[str, List[str]] = {}
+        for _, r in c2n.iterrows():
+            pid = str(r.get("c1_human_id", "")).strip()
+            if not pid:
+                continue
+            by_c1.setdefault(pid, []).append(str(r.get(VULN_FIELD, "")).strip())
+        inherited_c1 = []
+        for _, r in c1n.iterrows():
+            hid = str(r.get("human_id", "")).strip()
+            inherited_c1.append(_derive_vuln_from_children(by_c1.get(hid, [])))
+        c1n[VULN_FIELD] = inherited_c1
+
+    return {"C1": c1n, "C2": c2n, "C3": c3n, "C4": c4n}
 
 
 def _build_relation_helpers(c1: pd.DataFrame, c2: pd.DataFrame, c3: pd.DataFrame, c4: pd.DataFrame) -> Dict[str, Any]:
@@ -492,23 +713,27 @@ def evaluate_rules(
                                 res = int(rel.get("counts", {}).get("C3_by_C2", {}).get(hid, 0)) == 0
                     else:
                         # field-based checks
-                        field_val = str(rec.get(when_field, "")).strip()
-                        if op == "eq":
-                            res = field_val == val
-                        elif op == "ne":
-                            res = field_val != val
-                        elif op == "empty":
-                            res = field_val == ""
-                        elif op == "not_empty":
-                            res = field_val != ""
-                        elif op == "contains":
-                            res = val.lower() in field_val.lower()
-                        elif op == "in":
-                            allowed = {x.strip() for x in val.split(",") if x.strip()}
-                            res = field_val in allowed
-                        elif op == "not_in":
-                            denied = {x.strip() for x in val.split(",") if x.strip()}
-                            res = field_val not in denied
+                        if when_field not in df.columns:
+                            # Missing field: ignore condition (and avoid false positives on empty)
+                            res = False
+                        else:
+                            field_val = str(rec.get(when_field, "")).strip()
+                            if op == "eq":
+                                res = field_val == val
+                            elif op == "ne":
+                                res = field_val != val
+                            elif op == "empty":
+                                res = field_val == ""
+                            elif op == "not_empty":
+                                res = field_val != ""
+                            elif op == "contains":
+                                res = val.lower() in field_val.lower()
+                            elif op == "in":
+                                allowed = {x.strip() for x in val.split(",") if x.strip()}
+                                res = field_val in allowed
+                            elif op == "not_in":
+                                denied = {x.strip() for x in val.split(",") if x.strip()}
+                                res = field_val not in denied
 
                     cond_results.append(bool(res))
 
@@ -628,13 +853,18 @@ def compute(path: str) -> Tuple[pd.DataFrame, pd.DataFrame, Dict[str, pd.DataFra
 
     # NOTE: relations (orphans, missing descendants, etc.) are evaluated via RULES.
 
-    # Lookups (mínimos)
-    validate_lookup_multi(c1, "C1", "environments", "environment", lookups, issues)
-    validate_lookup_single(c1, "C1", "business_criticality", "criticality", lookups, issues)
-    validate_lookup_single(c3, "C3", "component_type", "component_type", lookups, issues)
-    validate_lookup_single(c3, "C3", "exposure", "exposure", lookups, issues)
-    validate_lookup_single(c4, "C4", "runtime_type", "runtime_type", lookups, issues)
+    
+    # Config/model drift checks (UX allows dynamic fields):
+    # - If LOOKUPS/RULES reference fields that don't exist in the model, surface as ISSUES.
+    base_views = {"C1": c1, "C2": c2, "C3": c3, "C4": c4}
+    validate_config_lookup_fields_exist(base_views, lookups, issues)
+    validate_config_rules_fields_exist(data.get("RULES", pd.DataFrame()), base_views, issues)
 
+    # Lookups: validate all lookup-backed fields that exist for each level (no hardcodes)
+    validate_lookups_for_level(c1, "C1", lookups, issues)
+    validate_lookups_for_level(c2, "C2", lookups, issues)
+    validate_lookups_for_level(c3, "C3", lookups, issues)
+    validate_lookups_for_level(c4, "C4", lookups, issues)
     # Normalize + derive vulnerabilities_detected across all levels
     views_by_level = normalize_and_derive_vulnerabilities(c1, c2, c3, c4, issues)
 
