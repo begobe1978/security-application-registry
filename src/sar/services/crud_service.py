@@ -12,6 +12,9 @@ from sar.infra.registry_repo import (
     append_row_existing_columns,
     generate_next_human_id,
     read_sheet,
+    write_meta_kv,
+    get_schema_map,
+    schema_hash,
 )
 from sar.services.compute_service import regenerate_views
 from sar.services.record_service import detect_level_meta
@@ -21,6 +24,16 @@ from sar.services.record_service import get_row_by_human_id
 
 
 PARENT_LEVEL = {"C2": "C1", "C3": "C2", "C4": "C3"}
+
+SCHEMA_SHEETS = [
+    "META",
+    "LOOKUPS",
+    "RULES",
+    "C1_Proyectos",
+    "C2_Aplicaciones",
+    "C3_Componentes",
+    "C4_Runtime",
+]
 
 
 def _validate_parent_ref_exists(*, path: str, child_level: str, parent_ref: str) -> None:
@@ -88,6 +101,21 @@ def add_new_field(*, path: str, human_id: str, field_name: str, value: Any):
 
     backup_registry(path)
     add_new_field_column(path, meta["sheet"], human_id, field_name, value)
+
+    # Mark schema dirty on the working registry (template promotion is a separate step)
+    try:
+        sm = get_schema_map(path, SCHEMA_SHEETS)
+        h = schema_hash(sm)
+        write_meta_kv(
+            path,
+            {
+                "schema_dirty": "yes",
+                "schema_hash": h,
+            },
+        )
+    except Exception:
+        # Non-fatal: registry can still work even if META cannot be updated
+        pass
 
     return regenerate_views(path)
 

@@ -30,6 +30,11 @@
       {% elif level == "C3" %}
         <a class="btn btn-ghost" href="/level/C4?parent={{ human_id }}">Ver C4 del componente</a>
       {% endif %}
+
+      {% if level == "C4" %}
+        <a class="btn btn-primary" href="/report/c4/{{ human_id }}.docx">Informe Word</a>
+        <a class="btn btn-secondary" href="/report/c4/{{ human_id }}.html">Informe HTML</a>
+      {% endif %}
       {% if level == "C1" %}
         <a class="btn btn-primary" href="/create/C2?parent={{ human_id }}">Alta C2</a>
       {% elif level == "C2" %}

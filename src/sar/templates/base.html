@@ -129,6 +129,23 @@
       border-radius:12px;
     }
 
+    .schema-badge{
+      max-width:420px;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+      font-size:11px;
+      font-weight:900;
+      letter-spacing:.2px;
+      padding: 6px 10px;
+      border-radius:12px;
+      border:1px solid rgba(255,255,255,.22);
+      color:var(--text-invert);
+    }
+    .schema-ok{ background:rgba(59,170,109,.18); }
+    .schema-dirty{ background:rgba(217,119,6,.22); }
+    .schema-missing{ background:rgba(220,38,38,.22); }
+
     .nav{
       display:flex;
       gap:8px;
@@ -297,6 +314,14 @@
       border:1px solid rgba(220,38,38,.18);
     }
 
+    .warnbox{
+      border-left:3px solid rgba(217,119,6,.75);
+      padding:10px 12px;
+      border-radius:12px;
+      background:rgba(217,119,6,.10);
+      border:1px solid rgba(217,119,6,.22);
+    }
+
     .grid{display:grid; gap:14px;}
     .grid-3{grid-template-columns:repeat(3, minmax(0,1fr));}
 
@@ -449,10 +474,30 @@ th, td{
         {{ path if path else "Sin registry cargado" }}
       </div>
 
+      {% if schema and schema.status != 'ok' and schema.status != 'template_only' and schema.status != 'no_template' %}
+        <a class="schema-badge schema-dirty" href="/" title="Plantilla/registry no coinciden">
+          Plantilla ≠ registry · revisar en Home
+        </a>
+      {% elif schema and schema.status == 'no_template' %}
+        <a class="schema-badge schema-missing" href="/" title="No hay plantilla base">
+          Falta plantilla base
+        </a>
+      {% endif %}
+
       <div class="nav">
         <a class="btn btn-secondary" href="/">Home</a>
         <a class="btn btn-secondary" href="/view-full">Full View</a>
         <a class="btn btn-secondary" href="/issues">Issues</a>
+
+        {% if current_user %}
+          <span class="schema-badge schema-ok" title="Usuario autenticado">
+            {{ current_user.username }} · {{ current_user.role }}
+          </span>
+
+          <form method="post" action="/logout" style="display:inline;">
+            <button class="btn btn-ghost" type="submit">Logout</button>
+          </form>
+        {% endif %}
       </div>
     </div>
   </div>

@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SAR — Informe {{ c4.human_id }}</title>
+    <style>
+      :root{--bg:#f6f7fb;--card:#ffffff;--text:#111827;--muted:#6b7280;--border:#e5e7eb;--mono:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;}
+      *{box-sizing:border-box}
+      body{margin:0;background:var(--bg);color:var(--text);font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial,"Noto Sans","Liberation Sans",sans-serif;}
+      .wrap{max-width:980px;margin:0 auto;padding:22px;}
+      .header{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px;}
+      h1{font-size:20px;margin:0;}
+      .sub{color:var(--muted);font-size:12px;}
+      .pill{display:inline-block;padding:2px 8px;border:1px solid var(--border);border-radius:999px;background:#fff;color:var(--muted);font-size:12px;font-family:var(--mono)}
+      .grid{display:grid;grid-template-columns:1fr;gap:12px;}
+      @media(min-width:900px){.grid{grid-template-columns:1fr 1fr}}
+      .card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:14px;box-shadow:0 1px 0 rgba(0,0,0,.03);}
+      .title{font-size:14px;font-weight:800;margin:0 0 10px 0;}
+      .kv{display:grid;grid-template-columns:140px 1fr;gap:8px 10px;align-items:baseline;}
+      .k{color:var(--muted);font-size:12px;}
+      .v{font-size:13px;}
+      table{width:100%;border-collapse:collapse;}
+      th,td{border-bottom:1px solid var(--border);text-align:left;padding:8px 6px;font-size:13px;vertical-align:top;}
+      th{color:var(--muted);font-size:12px;font-weight:800;}
+      .badge{display:inline-block;padding:2px 8px;border-radius:999px;border:1px solid var(--border);font-size:12px;color:var(--muted);background:#fff;margin-right:6px;}
+      .b-error{border-color:#fecaca;color:#991b1b;background:#fff5f5;}
+      .b-warning{border-color:#fde68a;color:#92400e;background:#fffbeb;}
+      .b-info{border-color:#bfdbfe;color:#1d4ed8;background:#eff6ff;}
+      .hr{height:1px;background:var(--border);margin:12px 0;}
+      .mono{font-family:var(--mono)}
+      .alert{border:1px solid var(--border);border-radius:12px;background:#fff;padding:10px;color:var(--muted);font-size:12px;}
+      .mermaid{background:#fff;border:1px solid var(--border);border-radius:14px;padding:10px;overflow:auto;}
+      pre{white-space:pre-wrap;background:#fff;border:1px solid var(--border);border-radius:14px;padding:10px;overflow:auto;font-size:12px;}
+      img{max-width:100%;height:auto;border:1px solid var(--border);border-radius:14px;background:#fff;}
+      .footer{margin-top:14px;color:var(--muted);font-size:12px;}
+      .actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:flex-end}
+      button{cursor:pointer;border:1px solid var(--border);background:#fff;border-radius:12px;padding:8px 10px;font-size:12px;}
+      button:hover{background:#f9fafb}
+      textarea{width:100%;min-height:180px;font-family:var(--mono);font-size:12px;padding:10px;border-radius:14px;border:1px solid var(--border)}
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="header">
+        <div>
+          <h1>SAR — Informe C4 ({{ c4.human_id }})</h1>
+          <div class="sub">Generado: <span class="mono">{{ generated_at }}</span> · Excel: <span class="mono">{{ registry.path }}</span></div>
+          <div class="sub">Schema: <span class="mono">{{ registry.schema_version }}</span> · Template: <span class="mono">{{ registry.template_version }}</span></div>
+        </div>
+        <div class="actions">
+          <button type="button" onclick="toggleRaw()">Ver / ocultar HTML</button>
+          <button type="button" onclick="copyRaw()">Copiar HTML</button>
+        </div>
+      </div>
+
+      <div id="raw" class="card" style="display:none;">
+        <div class="title">HTML del informe (para copiar y pegar)</div>
+        <div class="sub" style="margin-bottom:8px;">Consejo: si lo pegas en un editor que "limpie" HTML, usa primero un archivo .html (guardar como).</div>
+        <textarea id="rawText" readonly></textarea>
+      </div>
+
+      <div class="grid">
+        <div class="card">
+          <div class="title">Cadena C1 → C4</div>
+          <div class="kv">
+            <div class="k">C1</div><div class="v"><span class="pill">{{ c1.human_id }}</span> {{ c1.name }} <span class="sub">({{ c1.status }})</span></div>
+            <div class="k">C2</div><div class="v"><span class="pill">{{ c2.human_id }}</span> {{ c2.name }} <span class="sub">({{ c2.status }})</span></div>
+            <div class="k">C3</div><div class="v"><span class="pill">{{ c3.human_id }}</span> {{ c3.name }} <span class="sub">({{ c3.status }})</span></div>
+            <div class="k">C4</div><div class="v"><span class="pill">{{ c4.human_id }}</span> {{ c4.name }} <span class="sub">({{ c4.status }})</span></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="title">Contexto</div>
+          <div class="sub" style="margin-bottom:8px;">Elementos hermanos (para entender el entorno del C4).</div>
+          <div class="hr"></div>
+          <div class="k" style="margin-bottom:6px;">Componentes (C3) en la misma aplicación (C2)</div>
+          {% if components and components|length > 0 %}
+            <table>
+              <thead><tr><th>human_id</th><th>name</th><th>status</th></tr></thead>
+              <tbody>
+                {% for r in components %}
+                  <tr><td class="mono">{{ r.human_id }}</td><td>{{ r.name }}</td><td>{{ r.status }}</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          {% else %}
+            <div class="sub">—</div>
+          {% endif %}
+          <div class="hr"></div>
+          <div class="k" style="margin-bottom:6px;">Runtimes (C4) del mismo componente (C3)</div>
+          {% if runtimes and runtimes|length > 0 %}
+            <table>
+              <thead><tr><th>human_id</th><th>name</th><th>status</th></tr></thead>
+              <tbody>
+                {% for r in runtimes %}
+                  <tr><td class="mono">{{ r.human_id }}</td><td>{{ r.name }}</td><td>{{ r.status }}</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          {% else %}
+            <div class="sub">—</div>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:12px;">
+        <div class="title">Diagrama</div>
+        {% if diagram.truncated %}
+          <div class="alert" style="margin-bottom:10px;">⚠️ Diagrama truncado: se alcanzó el límite de {{ diagram.max_nodes }} nodos.</div>
+        {% endif %}
+
+        {% if diagram.png_ok and diagram.png_data_uri %}
+          <img src="{{ diagram.png_data_uri }}" alt="Diagrama C4" />
+          <div class="sub" style="margin-top:8px;">(Renderizado a PNG con Mermaid CLI.)</div>
+        {% else %}
+          <div class="alert" style="margin-bottom:10px;">No se pudo renderizar el PNG localmente ({{ diagram.png_error }}). Se incluye el Mermaid embebido.</div>
+          <div class="mermaid">{{ diagram.mermaid }}</div>
+          <details style="margin-top:10px;">
+            <summary class="sub" style="cursor:pointer;">Mostrar código Mermaid</summary>
+            <pre>{{ diagram.mermaid }}</pre>
+          </details>
+        {% endif %}
+      </div>
+
+      <div class="card" style="margin-top:12px;">
+        <div class="title">Issues (por nivel)</div>
+        {% for lvl in ["C1","C2","C3","C4"] %}
+          <div style="margin-top:10px;">
+            <div class="sub" style="font-weight:900;">{{ lvl }}</div>
+            {% set rows = issues[lvl] %}
+            {% if rows and rows|length > 0 %}
+              <div style="display:grid; gap:10px; margin-top:8px;">
+                {% for i in rows %}
+                  <div style="border:1px solid var(--border); border-radius:14px; padding:10px; background:#fff;">
+                    <div style="display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; align-items:center;">
+                      <div>
+                        {% if i.severity == "error" %}
+                          <span class="badge b-error">ERROR</span>
+                        {% elif i.severity == "warning" %}
+                          <span class="badge b-warning">WARNING</span>
+                        {% else %}
+                          <span class="badge b-info">INFO</span>
+                        {% endif %}
+                        <span class="badge">{{ i.issue_type }}</span>
+                      </div>
+                    </div>
+                    <div style="margin-top:8px;">{{ i.message }}</div>
+                    {% if i.suggested_fix %}
+                      <div class="sub" style="margin-top:6px;"><b>Fix:</b> {{ i.suggested_fix }}</div>
+                    {% endif %}
+                  </div>
+                {% endfor %}
+              </div>
+            {% else %}
+              <div class="sub" style="margin-top:6px;">No se han identificado issues en este nivel.</div>
+            {% endif %}
+          </div>
+        {% endfor %}
+      </div>
+
+      <div class="footer">SAR · Informe HTML autocontenido. Si el diagrama no se ve, instala Mermaid CLI (mmdc) o abre el HTML con acceso a CDN para Mermaid JS.</div>
+    </div>
+
+    <!-- Mermaid client-side fallback (only used if no PNG). Uses CDN. -->
+    <script>
+      // Populate "raw HTML" textarea with the full document markup.
+      (function(){
+        try{
+          var html = '<!doctype html>\n' + document.documentElement.outerHTML;
+          var ta = document.getElementById('rawText');
+          if (ta) ta.value = html;
+        } catch(e) {}
+      })();
+
+      function toggleRaw(){
+        var el = document.getElementById('raw');
+        if (!el) return;
+        el.style.display = (el.style.display === 'none' || !el.style.display) ? 'block' : 'none';
+        if (el.style.display === 'block') el.scrollIntoView({behavior:'smooth', block:'start'});
+      }
+      async function copyRaw(){
+        var ta = document.getElementById('rawText');
+        if (!ta) return;
+        ta.focus();
+        ta.select();
+        try{
+          await navigator.clipboard.writeText(ta.value);
+        } catch(e) {
+          try { document.execCommand('copy'); } catch(_) {}
+        }
+      }
+
+      (function(){
+        var hasPng = {{ 'true' if (diagram.png_ok and diagram.png_data_uri) else 'false' }};
+        if (hasPng) return;
+        var s = document.createElement('script');
+        s.type = 'module';
+        s.textContent = "import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs'; mermaid.initialize({ startOnLoad: true });";
+        document.body.appendChild(s);
+      })();
+    </script>
+  </body>
+</html>

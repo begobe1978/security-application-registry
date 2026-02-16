@@ -62,6 +62,71 @@
   {% endif %}
 </div>
 
+<br>
+
+<div class="card">
+  <h3 class="title" style="font-size:16px;">Plantilla base</h3>
+  {% if schema and schema.template_exists %}
+    <div class="muted" style="font-weight:900;">Plantilla: <span class="mono">{{ schema.template_path }}</span></div>
+    <div class="row" style="margin-top:8px; gap:16px; align-items:flex-start; flex-wrap:wrap;">
+      <div style="min-width:260px;">
+        <div class="muted">schema_version (plantilla)</div>
+        <div class="mono" style="font-weight:900;">{{ schema.template_schema_version or '-' }}</div>
+      </div>
+      <div style="min-width:260px;">
+        <div class="muted">schema_version (registry)</div>
+        <div class="mono" style="font-weight:900;">{{ schema.registry_schema_version or '-' }}</div>
+      </div>
+    </div>
+
+    {% if schema.status == 'dirty' %}
+      <div class="warnbox" style="margin-top:12px;">
+        <b>Plantilla y registry no coinciden.</b>
+        {% if schema.added %}
+          <div class="muted" style="margin-top:6px;">Campos nuevos en el registry (no están en la plantilla):</div>
+          <ul style="margin:6px 0 0 18px;">
+            {% for sh, cols in schema.added.items() %}
+              <li><span class="mono">{{ sh }}</span>: <span class="mono">{{ cols|join(', ') }}</span></li>
+            {% endfor %}
+          </ul>
+        {% endif %}
+        {% if schema.missing %}
+          <div class="muted" style="margin-top:10px;">Campos que existen en la plantilla pero faltan en el registry:</div>
+          <ul style="margin:6px 0 0 18px;">
+            {% for sh, cols in schema.missing.items() %}
+              <li><span class="mono">{{ sh }}</span>: <span class="mono">{{ cols|join(', ') }}</span></li>
+            {% endfor %}
+          </ul>
+        {% endif %}
+      </div>
+    {% else %}
+      <div class="help" style="margin-top:12px;">Plantilla y registry están alineados.</div>
+    {% endif %}
+
+    <div class="row" style="margin-top:12px; gap:10px; flex-wrap:wrap;">
+      <form method="post" action="/registry/reset-from-template">
+        <button class="btn btn-secondary" type="submit">Crear registry desde plantilla</button>
+      </form>
+      <form method="post" action="/template/promote">
+        <button class="btn btn-primary" type="submit" {% if not schema.added %}disabled{% endif %}>
+          Promover campos del registry a plantilla
+        </button>
+      </form>
+      <form method="post" action="/template/migrate-registry">
+        <button class="btn btn-ghost" type="submit" {% if not schema.missing %}disabled{% endif %}>
+          Migrar registry (añadir columnas faltantes)
+        </button>
+      </form>
+    </div>
+
+  {% else %}
+    <div class="errorbox">
+      <b>No se ha encontrado plantilla base.</b>
+      Coloca un <span class="mono">registry_template.xlsx</span> en <span class="mono">/data</span> o define <span class="mono">SAR_TEMPLATE_PATH</span>.
+    </div>
+  {% endif %}
+</div>
+
 {% if has_data %}
   <br>
 

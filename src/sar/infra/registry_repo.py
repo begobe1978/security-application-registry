@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import shutil
 from datetime import datetime
 from pathlib import Path
@@ -220,6 +222,135 @@ def read_sheet(path: str, sheet: str) -> pd.DataFrame:
     """Read a sheet from the registry Excel into a normalised dataframe."""
     df = pd.read_excel(path, sheet_name=sheet, dtype=str).fillna("")
     return normalize_columns(df)
+
+
+def read_meta_dict(path: str) -> dict[str, str]:
+    """Read META sheet as a key/value dictionary (both as strings)."""
+    try:
+        df = pd.read_excel(path, sheet_name="META", dtype=str).fillna("")
+    except Exception:
+        return {}
+    df = normalize_columns(df)
+    if "key" not in df.columns or "value" not in df.columns:
+        return {}
+    out: dict[str, str] = {}
+    for _, r in df.iterrows():
+        k = str(r.get("key", "") or "").strip()
+        if not k:
+            continue
+        out[k] = str(r.get("value", "") or "")
+    return out
+
+
+def write_meta_kv(path: str, updates: dict[str, str]) -> None:
+    """Upsert key/value pairs in META (preserving formatting with openpyxl)."""
+    if not updates:
+        return
+    wb = load_workbook(path)
+    if "META" not in wb.sheetnames:
+        raise ValueError("No existe la pestaña 'META' en el Excel.")
+    ws = wb["META"]
+
+    # Find key/value columns by header
+    headers: dict[str, int] = {}
+    for c in range(1, ws.max_column + 1):
+        v = ws.cell(row=1, column=c).value
+        if v is None:
+            continue
+        headers[_norm_key(v)] = c
+    if "key" not in headers or "value" not in headers:
+        raise ValueError("La pestaña 'META' debe contener columnas 'key' y 'value'.")
+    c_key = headers["key"]
+    c_val = headers["value"]
+
+    # Build existing row index
+    key_to_row: dict[str, int] = {}
+    for r in range(2, ws.max_row + 1):
+        k = str(ws.cell(row=r, column=c_key).value or "").strip()
+        if k:
+            key_to_row[k] = r
+
+    # Append/update
+    last = ws.max_row
+    for k, v in updates.items():
+        ks = str(k or "").strip()
+        if not ks:
+            continue
+        if ks in key_to_row:
+            rr = key_to_row[ks]
+        else:
+            last += 1
+            rr = last
+            ws.cell(row=rr, column=c_key).value = ks
+        ws.cell(row=rr, column=c_val).value = str(v or "")
+
+    wb.save(path)
+
+
+def get_sheet_headers(path: str, sheet: str) -> list[str]:
+    """Return normalised headers for a given sheet (row 1), excluding empty headers."""
+    wb = load_workbook(path, read_only=True)
+    if sheet not in wb.sheetnames:
+        return []
+    ws = wb[sheet]
+    out: list[str] = []
+    for c in range(1, ws.max_column + 1):
+        v = ws.cell(row=1, column=c).value
+        if v is None:
+            continue
+        s = str(v).strip()
+        if not s:
+            continue
+        out.append(_norm_key(s))
+    # De-dup while keeping order
+    seen = set()
+    uniq = []
+    for h in out:
+        if h in seen:
+            continue
+        seen.add(h)
+        uniq.append(h)
+    return uniq
+
+
+def get_schema_map(path: str, sheets: list[str]) -> dict[str, list[str]]:
+    """Return schema map: {sheet_name: [normalised_header, ...]}"""
+    sm: dict[str, list[str]] = {}
+    for sh in sheets:
+        sm[sh] = get_sheet_headers(path, sh)
+    return sm
+
+
+def schema_hash(schema_map: dict[str, list[str]]) -> str:
+    """Stable SHA1 hash for a schema map (sorted by sheet name)."""
+    payload = {k: schema_map[k] for k in sorted(schema_map.keys())}
+    raw = json.dumps(payload, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+    return hashlib.sha1(raw.encode("utf-8")).hexdigest()
+
+
+def add_missing_columns(path: str, sheet: str, columns: list[str]) -> None:
+    """Add columns (headers only) to a sheet if missing. Columns are given as *raw* header names."""
+    cols = [str(c or "").strip() for c in (columns or []) if str(c or "").strip()]
+    if not cols:
+        return
+    wb = load_workbook(path)
+    if sheet not in wb.sheetnames:
+        raise ValueError(f"No existe la pestaña '{sheet}' en el Excel.")
+    ws = wb[sheet]
+
+    existing = get_sheet_headers(path, sheet)
+    existing_set = set(existing)
+
+    # Append at end. We write the raw header exactly as passed.
+    for raw in cols:
+        nk = _norm_key(raw)
+        if nk in existing_set:
+            continue
+        new_col = ws.max_column + 1
+        ws.cell(row=1, column=new_col).value = raw
+        existing_set.add(nk)
+
+    wb.save(path)
 
 
 def read_lookups(path: str) -> pd.DataFrame:

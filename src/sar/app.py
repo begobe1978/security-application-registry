@@ -5,17 +5,29 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
-from fastapi import FastAPI, File, Form, Request, UploadFile
-from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
+from fastapi import Depends, FastAPI, File, Form, Request, UploadFile
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from sar.auth.session import COOKIE_NAME, sign_session
+from sar.auth.users import authenticate
+from sar.permissions import cookie_settings, current_user_optional, require_role, require_user
+
 from sar.core.utils import canon, df_to_csv_stream, first_existing_col, safe_count
 from sar.infra.registry_repo import read_sheet, lookup_options_by_level
+from sar.infra.registry_repo import (
+    read_meta_dict,
+    write_meta_kv,
+    get_schema_map,
+    schema_hash,
+    add_missing_columns,
+)
 from sar.services.compute_service import regenerate_views
 from sar.services.crud_service import update_record_existing_fields, add_new_field, create_record
 from sar.core.mapping import meta_for_level
@@ -30,8 +42,15 @@ from sar.services.record_service import (
 )
 
 from sar.services.diagram_service import build_record_diagram
+from sar.services.report_service import generate_c4_chain_report_docx, generate_c4_chain_report_html
 
 app = FastAPI()
+
+
+@app.middleware("http")
+async def _auth_middleware(request: Request, call_next):
+    request.state.user = current_user_optional(request)
+    return await call_next(request)
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -40,6 +59,30 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 DATA_DIR = Path(os.getenv("SAR_DATA_DIR", "data")).resolve()
 DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+TEMPLATE_PATH = Path(os.getenv("SAR_TEMPLATE_PATH", str(DATA_DIR / "registry_template.xlsx"))).resolve()
+
+# Word report template (docxtpl)
+REPORT_TEMPLATE_DOCX = Path(
+    os.getenv("SAR_REPORT_TEMPLATE_DOCX", str(BASE_DIR / "report_templates" / "c4_chain_report.docx"))
+).resolve()
+
+# HTML report template
+REPORT_TEMPLATE_HTML = Path(
+    os.getenv("SAR_REPORT_TEMPLATE_HTML", str(BASE_DIR / "report_templates" / "c4_chain_report.html.j2"))
+).resolve()
+REPORTS_DIR = Path(os.getenv("SAR_REPORTS_DIR", str(DATA_DIR / "reports"))).resolve()
+REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+
+SCHEMA_SHEETS = [
+    "META",
+    "LOOKUPS",
+    "RULES",
+    "C1_Proyectos",
+    "C2_Aplicaciones",
+    "C3_Componentes",
+    "C4_Runtime",
+]
 
 STATE = {
     "path": "",
@@ -56,6 +99,92 @@ PARENT_LEVEL = {"C2": "C1", "C3": "C2", "C4": "C3"}
 
 def _ensure_registry_loaded() -> bool:
     return bool(STATE.get("path")) and os.path.exists(STATE["path"])
+
+
+def _bump_semver(v: str) -> str:
+    """Bump patch of a semver-like string. Falls back to appending '.1'."""
+    s = str(v or "").strip()
+    m = re.match(r"^(\d+)\.(\d+)\.(\d+)$", s)
+    if m:
+        a, b, c = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        return f"{a}.{b}.{c+1}"
+    m2 = re.match(r"^(\d+)\.(\d+)$", s)
+    if m2:
+        a, b = int(m2.group(1)), int(m2.group(2))
+        return f"{a}.{b}.1"
+    if s.isdigit():
+        return str(int(s) + 1)
+    return (s + ".1") if s else "0.1.0"
+
+
+def _schema_state() -> dict:
+    """Compute schema/template compatibility state for UI banners."""
+    out = {
+        "template_exists": TEMPLATE_PATH.exists(),
+        "template_path": str(TEMPLATE_PATH),
+        "registry_path": STATE.get("path", ""),
+        "status": "no_template",
+        "template_schema_version": "",
+        "registry_schema_version": "",
+        "added": {},
+        "missing": {},
+        "dirty": False,
+    }
+
+    if not TEMPLATE_PATH.exists():
+        return out
+
+    tmeta = read_meta_dict(str(TEMPLATE_PATH))
+    out["template_schema_version"] = tmeta.get("schema_version") or tmeta.get("template_version", "")
+
+    if not _ensure_registry_loaded():
+        out["status"] = "template_only"
+        return out
+
+    rmeta = read_meta_dict(STATE["path"])
+    out["registry_schema_version"] = rmeta.get("schema_version") or rmeta.get("template_version", "")
+
+    # Schema maps
+    tmap = get_schema_map(str(TEMPLATE_PATH), SCHEMA_SHEETS)
+    rmap = get_schema_map(STATE["path"], SCHEMA_SHEETS)
+
+    # Diff (normalised headers)
+    added = {}
+    missing = {}
+    dirty = False
+    for sh in SCHEMA_SHEETS:
+        tcols = set(tmap.get(sh, []))
+        rcols = set(rmap.get(sh, []))
+        a = sorted(list(rcols - tcols))
+        m = sorted(list(tcols - rcols))
+        if a:
+            added[sh] = a
+            dirty = True
+        if m:
+            missing[sh] = m
+            dirty = True
+
+    out["added"] = added
+    out["missing"] = missing
+    out["dirty"] = dirty
+
+    if not dirty and (out["template_schema_version"] == out["registry_schema_version"] or not out["template_schema_version"] or not out["registry_schema_version"]):
+        out["status"] = "ok"
+    else:
+        out["status"] = "dirty"
+
+    return out
+
+
+def _render(request: Request, template_name: str, ctx: dict):
+    """TemplateResponse wrapper injecting global UI state."""
+    base_ctx = {
+        "request": request,
+        "schema": _schema_state(),
+        "current_user": getattr(request.state, "user", None),
+    }
+    merged = {**base_ctx, **(ctx or {})}
+    return templates.TemplateResponse(template_name, merged)
 
 
 
@@ -134,8 +263,43 @@ def _search_parent_candidates(*, child_level: str, q: str, limit: int = 20):
 # ------------------ Routes ------------------
 
 
+@app.get("/login", response_class=HTMLResponse)
+def login_get(request: Request, next: str = "/"):
+    if getattr(request.state, "user", None):
+        return RedirectResponse(url=next or "/", status_code=303)
+    return _render(request, "login.html", {"path": STATE.get("path", ""), "next": next, "error": ""})
+
+
+@app.post("/login")
+def login_post(
+    request: Request,
+    username: str = Form(...),
+    password: str = Form(...),
+    next: str = Form("/"),
+):
+    u = authenticate(username=username, password=password)
+    if not u:
+        return _render(request, "login.html", {"path": STATE.get("path", ""), "next": next, "error": "Credenciales inválidas"})
+    token = sign_session(u.username)
+    resp = RedirectResponse(url=(next or "/"), status_code=303)
+    resp.set_cookie(
+        COOKIE_NAME,
+        token,
+        max_age=int(os.getenv("SAR_SESSION_MAX_AGE", "28800")),
+        **cookie_settings(),
+    )
+    return resp
+
+
+@app.post("/logout")
+def logout_post(request: Request):
+    resp = RedirectResponse(url="/login", status_code=303)
+    resp.delete_cookie(COOKIE_NAME)
+    return resp
+
+
 @app.get("/", response_class=HTMLResponse)
-def home(request: Request):
+def home(request: Request, user=Depends(require_user)):
     view_rows = int(len(STATE["view_full"])) if STATE["view_full"] is not None else 0
     issues_errors = safe_count(STATE["issues"], "severity", "error")
     issues_warnings = safe_count(STATE["issues"], "severity", "warning")
@@ -144,7 +308,8 @@ def home(request: Request):
         STATE["issues"] is not None and not STATE["issues"].empty
     )
 
-    return templates.TemplateResponse(
+    return _render(
+        request,
         "index.html",
         {
             "request": request,
@@ -162,7 +327,7 @@ def home(request: Request):
 
 
 @app.get("/open-last")
-def open_last():
+def open_last(user=Depends(require_user)):
     """Load the newest registry found in /data and regenerate views."""
     STATE["last_error"] = ""
     try:
@@ -181,10 +346,134 @@ def open_last():
         return RedirectResponse(url="/", status_code=303)
 
 
+@app.post("/registry/reset-from-template")
+def reset_registry_from_template(user=Depends(require_role("admin"))):
+    """Create a fresh registry in /data from the base template and open it."""
+    STATE["last_error"] = ""
+    try:
+        if not TEMPLATE_PATH.exists():
+            raise ValueError("No existe la plantilla base (registry_template.xlsx).")
+
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        out_path = DATA_DIR / f"{ts}__registry.xlsx"
+        shutil.copy2(TEMPLATE_PATH, out_path)
+
+        # Stamp meta on the new registry
+        tmeta = read_meta_dict(str(TEMPLATE_PATH))
+        base_ver = tmeta.get("schema_version") or tmeta.get("template_version", "")
+        tmap = get_schema_map(str(TEMPLATE_PATH), SCHEMA_SHEETS)
+        th = schema_hash(tmap)
+        write_meta_kv(
+            str(out_path),
+            {
+                "schema_version": base_ver,
+                "schema_hash": th,
+                "schema_base_version": base_ver,
+                "schema_dirty": "no",
+                "last_modified": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            },
+        )
+
+        STATE["path"] = str(out_path.resolve())
+        view_full, issues, views_by_level = regenerate_views(STATE["path"])
+        STATE["view_full"] = view_full
+        STATE["issues"] = issues
+        STATE["views_by_level"] = views_by_level
+        STATE["last_regen"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        return RedirectResponse(url="/", status_code=303)
+    except Exception as e:
+        STATE["last_error"] = str(e)
+        return RedirectResponse(url="/", status_code=303)
+
+
+@app.post("/template/promote")
+def promote_registry_schema_to_template(user=Depends(require_role("admin"))):
+    """Promote columns present in the active registry but missing in the template."""
+    STATE["last_error"] = ""
+    try:
+        if not TEMPLATE_PATH.exists():
+            raise ValueError("No existe la plantilla base (registry_template.xlsx).")
+        if not _ensure_registry_loaded():
+            raise ValueError("No hay un registry cargado.")
+
+        st = _schema_state()
+        if not st.get("added"):
+            return RedirectResponse(url="/", status_code=303)
+
+        # Apply missing columns to template
+        for sh, cols in st["added"].items():
+            # We write normalised headers as-is (stable and predictable)
+            add_missing_columns(str(TEMPLATE_PATH), sh, cols)
+
+        # Update schema meta in template
+        tmeta = read_meta_dict(str(TEMPLATE_PATH))
+        cur = tmeta.get("schema_version") or tmeta.get("template_version") or "0.1.0"
+        new_ver = _bump_semver(cur)
+        tmap = get_schema_map(str(TEMPLATE_PATH), SCHEMA_SHEETS)
+        th = schema_hash(tmap)
+        write_meta_kv(
+            str(TEMPLATE_PATH),
+            {
+                "schema_version": new_ver,
+                "schema_hash": th,
+                "last_modified": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            },
+        )
+
+        return RedirectResponse(url="/", status_code=303)
+    except Exception as e:
+        STATE["last_error"] = str(e)
+        return RedirectResponse(url="/", status_code=303)
+
+
+@app.post("/template/migrate-registry")
+def migrate_registry_to_template_schema(user=Depends(require_role("admin"))):
+    """Add to the active registry any columns that exist in the template but are missing in the registry."""
+    STATE["last_error"] = ""
+    try:
+        if not TEMPLATE_PATH.exists():
+            raise ValueError("No existe la plantilla base (registry_template.xlsx).")
+        if not _ensure_registry_loaded():
+            raise ValueError("No hay un registry cargado.")
+
+        st = _schema_state()
+        if st.get("missing"):
+            for sh, cols in st["missing"].items():
+                add_missing_columns(STATE["path"], sh, cols)
+
+        # Sync schema meta into registry
+        tmeta = read_meta_dict(str(TEMPLATE_PATH))
+        base_ver = tmeta.get("schema_version") or tmeta.get("template_version", "")
+        rmap = get_schema_map(STATE["path"], SCHEMA_SHEETS)
+        rh = schema_hash(rmap)
+        write_meta_kv(
+            STATE["path"],
+            {
+                "schema_version": base_ver,
+                "schema_hash": rh,
+                "schema_dirty": "no" if not st.get("added") else "yes",
+                "last_modified": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            },
+        )
+
+        # Regenerate views after structural change
+        view_full, issues, views_by_level = regenerate_views(STATE["path"])
+        STATE["view_full"] = view_full
+        STATE["issues"] = issues
+        STATE["views_by_level"] = views_by_level
+        STATE["last_regen"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        return RedirectResponse(url="/", status_code=303)
+    except Exception as e:
+        STATE["last_error"] = str(e)
+        return RedirectResponse(url="/", status_code=303)
+
+
 @app.post("/regenerate")
 async def regenerate(
     path: str = Form(""),
     file: UploadFile | None = File(None),
+    user=Depends(require_role("editor")),
 ):
     STATE["last_error"] = ""
     try:
@@ -225,6 +514,7 @@ async def regenerate(
 @app.get("/view-full", response_class=HTMLResponse)
 def view_full(
     request: Request,
+    user=Depends(require_user),
     q: str = "",
     exposure: str = "",
     internet_exposure: str = "",
@@ -275,7 +565,8 @@ def view_full(
         # para compatibilidad con templates antiguos. Ya no es necesario y generaba columnas redundantes
         # al final de la tabla en VIEW_Full.
 
-    return templates.TemplateResponse(
+    return _render(
+        request,
         "view_full.html",
         {
             "request": request,
@@ -294,7 +585,7 @@ def view_full(
 
 
 @app.get("/api/parents/search")
-def api_search_parents(child_level: str = "", q: str = "", limit: int = 20):
+def api_search_parents(child_level: str = "", q: str = "", limit: int = 20, user=Depends(require_user)):
     """Autocomplete endpoint for parent ids.
 
     - child_level: level being edited/created (C2/C3/C4)
@@ -314,6 +605,7 @@ def api_search_parents(child_level: str = "", q: str = "", limit: int = 20):
 @app.get("/issues", response_class=HTMLResponse)
 def issues(
     request: Request,
+    user=Depends(require_user),
     severity: str = "",
     level: str = "",
     issue_type: str = "",
@@ -328,7 +620,8 @@ def issues(
         if issue_type and "issue_type" in df.columns:
             df = df[df["issue_type"] == issue_type]
 
-    return templates.TemplateResponse(
+    return _render(
+        request,
         "issues.html",
         {
             "request": request,
@@ -354,6 +647,7 @@ def list_level(
     orphan: str = "",  # "1" => only orphans
     view: str = "compact",  # compact|full
     vulnerabilities_detected: str = "",
+    user=Depends(require_user),
 ):
     """List all records for a given level (C1..C4).
 
@@ -501,7 +795,8 @@ def list_level(
                 }
             )
 
-    return templates.TemplateResponse(
+    return _render(
+        request,
         "level_list.html",
         {
             "request": request,
@@ -523,7 +818,7 @@ def list_level(
 
 
 @app.get("/record/{human_id}", response_class=HTMLResponse)
-def record(request: Request, human_id: str):
+def record(request: Request, human_id: str, user=Depends(require_user)):
     if not _ensure_registry_loaded():
         return RedirectResponse(url="/", status_code=303)
 
@@ -604,7 +899,8 @@ def record(request: Request, human_id: str):
         mermaid_code = ""
         diagram_meta = {"truncated": False, "node_count": 0, "max_nodes": max_nodes}
 
-    return templates.TemplateResponse(
+    return _render(
+        request,
         "record.html",
         {
             "request": request,
@@ -630,7 +926,7 @@ def record(request: Request, human_id: str):
 
 
 @app.post("/record/{human_id}/edit")
-async def edit_record_existing_fields(request: Request, human_id: str):
+async def edit_record_existing_fields(request: Request, human_id: str, user=Depends(require_role("editor"))):
     """Update multiple existing fields for a record.
 
     This endpoint only updates columns that already exist in the corresponding sheet.
@@ -669,7 +965,7 @@ async def edit_record_existing_fields(request: Request, human_id: str):
 
 
 @app.post("/record/{human_id}/add-field/preview")
-async def preview_add_field(request: Request, human_id: str):
+async def preview_add_field(request: Request, human_id: str, user=Depends(require_role("editor"))):
     """Preview creation of a new field (column) before writing to Excel.
 
     This is a separate flow from updates to avoid creating columns by typo.
@@ -688,7 +984,8 @@ async def preview_add_field(request: Request, human_id: str):
 
         # Render a confirmation page (two-step confirmation)
         STATE["last_error"] = ""
-        return templates.TemplateResponse(
+        return _render(
+            request,
             "add_field_confirm.html",
             {
                 "request": request,
@@ -703,7 +1000,7 @@ async def preview_add_field(request: Request, human_id: str):
 
 
 @app.post("/record/{human_id}/add-field")
-async def confirm_add_field(request: Request, human_id: str):
+async def confirm_add_field(request: Request, human_id: str, user=Depends(require_role("editor"))):
     """Confirm and create a new field (column) in the Excel registry."""
     if not _ensure_registry_loaded():
         return RedirectResponse(url="/", status_code=303)
@@ -735,11 +1032,106 @@ async def confirm_add_field(request: Request, human_id: str):
         return RedirectResponse(url=f"/record/{canon(human_id)}", status_code=303)
 
 
+@app.get("/report/c4/{human_id}.docx")
+async def report_c4_docx(request: Request, human_id: str, user=Depends(require_user)):
+    """Generate a Word report for a C4 record (RUN-xxxx) and return it as a download."""
+    if not _ensure_registry_loaded():
+        return RedirectResponse(url="/", status_code=303)
+
+    run_id = canon(human_id)
+    if not run_id.startswith("RUN-"):
+        return JSONResponse({"error": "Solo disponible para registros C4 (RUN-xxxx)."}, status_code=400)
+
+    # Ensure we have issues computed (report relies on them). If not available, regenerate.
+    if STATE.get("issues") is None or getattr(STATE.get("issues"), "empty", True):
+        try:
+            regenerate_views(STATE["path"], STATE)
+        except Exception:
+            pass
+
+    try:
+        max_nodes = int(request.query_params.get("max_nodes", "200"))
+    except Exception:
+        max_nodes = 200
+
+    try:
+        out_docx = generate_c4_chain_report_docx(
+            registry_path=STATE["path"],
+            run_human_id=run_id,
+            issues_df=STATE.get("issues"),
+            template_docx_path=str(REPORT_TEMPLATE_DOCX),
+            out_dir=str(REPORTS_DIR),
+            max_nodes=max_nodes,
+        )
+    except FileNotFoundError:
+        return JSONResponse(
+            {"error": f"No se encontró la plantilla de informe Word: {REPORT_TEMPLATE_DOCX}"},
+            status_code=500,
+        )
+    except Exception as e:
+        return JSONResponse({"error": f"No se pudo generar el informe: {type(e).__name__}: {e}"}, status_code=500)
+
+    filename = f"{run_id}__informe.docx"
+    return FileResponse(
+        path=str(out_docx),
+        filename=filename,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    )
+
+
+@app.get("/report/c4/{human_id}.html")
+async def report_c4_html(request: Request, human_id: str, user=Depends(require_user)):
+    """Generate an HTML report for a C4 record (RUN-xxxx).
+
+    If `raw=1` query param is provided, returns the HTML as plain text for easy copy/paste.
+    """
+    if not _ensure_registry_loaded():
+        return RedirectResponse(url="/", status_code=303)
+
+    run_id = canon(human_id)
+    if not run_id.startswith("RUN-"):
+        return JSONResponse({"error": "Solo disponible para registros C4 (RUN-xxxx)."}, status_code=400)
+
+    # Ensure we have issues computed (report relies on them). If not available, regenerate.
+    if STATE.get("issues") is None or getattr(STATE.get("issues"), "empty", True):
+        try:
+            regenerate_views(STATE["path"], STATE)
+        except Exception:
+            pass
+
+    try:
+        max_nodes = int(request.query_params.get("max_nodes", "200"))
+    except Exception:
+        max_nodes = 200
+
+    try:
+        out_html = generate_c4_chain_report_html(
+            registry_path=STATE["path"],
+            run_human_id=run_id,
+            issues_df=STATE.get("issues"),
+            template_html_path=str(REPORT_TEMPLATE_HTML),
+            out_dir=str(REPORTS_DIR),
+            max_nodes=max_nodes,
+        )
+    except FileNotFoundError:
+        return JSONResponse(
+            {"error": f"No se encontró la plantilla de informe HTML: {REPORT_TEMPLATE_HTML}"},
+            status_code=500,
+        )
+    except Exception as e:
+        return JSONResponse({"error": f"No se pudo generar el informe: {type(e).__name__}: {e}"}, status_code=500)
+
+    html_text = Path(out_html).read_text(encoding="utf-8")
+    if str(request.query_params.get("raw", "")).strip() in ("1", "true", "yes"):
+        return PlainTextResponse(content=html_text, media_type="text/plain; charset=utf-8")
+    return HTMLResponse(content=html_text)
+
+
 
 
 
 @app.get("/create/{level}", response_class=HTMLResponse)
-def create_form(request: Request, level: str, parent: str = ""):
+def create_form(request: Request, level: str, parent: str = "", user=Depends(require_role("editor"))):
     """Render creation form for a given level (C1-C4)."""
     if not _ensure_registry_loaded():
         return RedirectResponse(url="/", status_code=303)
@@ -764,7 +1156,8 @@ def create_form(request: Request, level: str, parent: str = ""):
 
     lookups = lookup_options_by_level(STATE["path"], meta["level"])
 
-    return templates.TemplateResponse(
+    return _render(
+        request,
         "create_form.html",
         {
             "request": request,
@@ -780,7 +1173,7 @@ def create_form(request: Request, level: str, parent: str = ""):
 
 
 @app.post("/create/{level}/preview", response_class=HTMLResponse)
-async def create_preview(request: Request, level: str):
+async def create_preview(request: Request, level: str, user=Depends(require_role("editor"))):
     """Preview creation (two-step confirmation) without writing to Excel."""
     if not _ensure_registry_loaded():
         return RedirectResponse(url="/", status_code=303)
@@ -808,7 +1201,8 @@ async def create_preview(request: Request, level: str):
         next_id = generate_next_human_id(STATE["path"], meta["sheet"], meta["prefix"])
 
         STATE["last_error"] = ""
-        return templates.TemplateResponse(
+        return _render(
+            request,
             "create_confirm.html",
             {
                 "request": request,
@@ -835,7 +1229,7 @@ async def create_preview(request: Request, level: str):
 
 
 @app.post("/create/{level}")
-async def create_confirm(request: Request, level: str):
+async def create_confirm(request: Request, level: str, user=Depends(require_role("editor"))):
     """Confirm and create the record in Excel."""
     if not _ensure_registry_loaded():
         return RedirectResponse(url="/", status_code=303)
@@ -873,7 +1267,7 @@ async def create_confirm(request: Request, level: str):
 
 
 @app.post("/deprecate/{human_id}")
-def deprecate(human_id: str):
+def deprecate(human_id: str, user=Depends(require_role("editor"))):
     if not _ensure_registry_loaded():
         return RedirectResponse(url="/", status_code=303)
 
@@ -904,6 +1298,7 @@ def update_existing_fields(
     human_id: str,
     field: str = Form(""),
     value: str = Form(""),
+    user=Depends(require_role("editor")),
 ):
     """Update a single existing field (column) for a record.
 
@@ -933,7 +1328,7 @@ def update_existing_fields(
 
 
 @app.get("/export/view-full.csv")
-def export_view_full():
+def export_view_full(user=Depends(require_user)):
     df = STATE["view_full"]
     if df is None or df.empty:
         return RedirectResponse(url="/", status_code=303)
@@ -942,7 +1337,7 @@ def export_view_full():
 
 
 @app.get("/export/issues.csv")
-def export_issues():
+def export_issues(user=Depends(require_user)):
     df = STATE["issues"]
     if df is None or df.empty:
         return RedirectResponse(url="/", status_code=303)

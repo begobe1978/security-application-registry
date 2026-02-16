@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="card">
+  <h2>Login</h2>
+
+  {% if error %}
+    <div style="padding:10px 12px; border:1px solid #E35D5D; border-radius:12px; margin:12px 0;">
+      {{ error }}
+    </div>
+  {% endif %}
+
+  <form method="post" action="/login">
+    <input type="hidden" name="next" value="{{ next or '/' }}"/>
+
+    <div style="display:grid; gap:10px; max-width:420px;">
+      <label>
+        <div style="font-weight:800; margin-bottom:6px;">Username</div>
+        <input name="username" required style="width:100%; padding:10px 12px; border-radius:12px; border:1px solid var(--border);" />
+      </label>
+
+      <label>
+        <div style="font-weight:800; margin-bottom:6px;">Password</div>
+        <input name="password" type="password" required style="width:100%; padding:10px 12px; border-radius:12px; border:1px solid var(--border);" />
+      </label>
+
+      <button class="btn btn-primary" type="submit" style="justify-self:start;">Login</button>
+    </div>
+  </form>
+</div>
+
+{% endblock %}
