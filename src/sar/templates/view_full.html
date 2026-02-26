@@ -10,11 +10,11 @@
   <h2 class="title" style="margin:0;">VIEW_Full</h2>
   <div class="row" style="gap:10px;">
     <a class="btn btn-ghost" href="/export/view-full.csv">Export CSV</a>
-    <a class="btn btn-primary" href="/create/C1">Crear C1 (Project)</a>
+    <a class="btn btn-primary" href="/create/C1">Crear {{ level_labels.get("C1","C1") }} </a>
   </div>
 </div>
 <p class="subtitle">
-Vista operativa (1 fila = 1 runtime). Incluye todos los campos de C1–C4 (compact).
+Vista operativa (1 fila = 1 runtime). Incluye todos los campos de {{ level_labels.get("C1","C1") }}–{{ level_labels.get("C4","C4") }} (compact).
 </p>
 
 <form method="get" class="card" style="margin-bottom:16px;">
@@ -26,17 +26,17 @@ Vista operativa (1 fila = 1 runtime). Incluye todos los campos de C1–C4 (compa
     </div>
 
     <div class="field" style="min-width:180px; flex:1 1 200px;">
-      <label>Exposure (C3)</label>
+      <label>Exposure ({{ level_labels.get("C3","C3") }})</label>
       <input name="exposure" value="{{ exposure }}" placeholder="ej: internal">
     </div>
 
     <div class="field" style="min-width:220px; flex:1 1 240px;">
-      <label>Internet exposure (C4)</label>
+      <label>Internet exposure ({{ level_labels.get("C4","C4") }})</label>
       <input name="internet_exposure" value="{{ internet_exposure }}" placeholder="ej: yes/no">
     </div>
 
     <div class="field" style="min-width:180px; flex:1 1 220px;">
-      <label>Status runtime (C4)</label>
+      <label>Status {{ level_labels.get("C4","C4") }}</label>
       <input name="status" value="{{ status }}" placeholder="active/draft/deprecated">
     </div>
   </div>
@@ -44,7 +44,7 @@ Vista operativa (1 fila = 1 runtime). Incluye todos los campos de C1–C4 (compa
   <!-- Fila 2: vulns a lo largo de la cadena -->
   <div class="row" style="gap:12px; flex-wrap:wrap; align-items:flex-end; margin-top:12px;">
     <div class="field" style="min-width:170px; flex:0 1 180px;">
-      <label>Vulns (C1)</label>
+      <label>Vulns ({{ level_labels.get("C1","C1") }})</label>
       <select name="vuln_c1">
         <option value="" {% if not vuln_c1 %}selected{% endif %}>—</option>
         <option value="yes" {% if vuln_c1=='yes' %}selected{% endif %}>yes</option>
@@ -54,7 +54,7 @@ Vista operativa (1 fila = 1 runtime). Incluye todos los campos de C1–C4 (compa
     </div>
 
     <div class="field" style="min-width:170px; flex:0 1 180px;">
-      <label>Vulns (C2)</label>
+      <label>Vulns ({{ level_labels.get("C2","C2") }})</label>
       <select name="vuln_c2">
         <option value="" {% if not vuln_c2 %}selected{% endif %}>—</option>
         <option value="yes" {% if vuln_c2=='yes' %}selected{% endif %}>yes</option>
@@ -64,7 +64,7 @@ Vista operativa (1 fila = 1 runtime). Incluye todos los campos de C1–C4 (compa
     </div>
 
     <div class="field" style="min-width:170px; flex:0 1 180px;">
-      <label>Vulns (C3)</label>
+      <label>Vulns ({{ level_labels.get("C3","C3") }})</label>
       <select name="vuln_c3">
         <option value="" {% if not vuln_c3 %}selected{% endif %}>—</option>
         <option value="yes" {% if vuln_c3=='yes' %}selected{% endif %}>yes</option>
@@ -74,7 +74,7 @@ Vista operativa (1 fila = 1 runtime). Incluye todos los campos de C1–C4 (compa
     </div>
 
     <div class="field" style="min-width:170px; flex:0 1 180px;">
-      <label>Vulns (C4)</label>
+      <label>Vulns ({{ level_labels.get("C4","C4") }})</label>
       <select name="vuln_c4">
         <option value="" {% if not vuln_c4 %}selected{% endif %}>—</option>
         <option value="yes" {% if vuln_c4=='yes' %}selected{% endif %}>yes</option>
@@ -135,16 +135,16 @@ Vista operativa (1 fila = 1 runtime). Incluye todos los campos de C1–C4 (compa
       <thead>
         <tr>
           {% if ns.c1|length > 0 %}
-            <th class="grp c1" colspan="{{ ns.c1|length }}">C1</th>
+            <th class="grp c1" colspan="{{ ns.c1|length }}">{{ level_labels.get("C1","C1") }}</th>
           {% endif %}
           {% if ns.c2|length > 0 %}
-            <th class="grp c2 sep-left-strong" colspan="{{ ns.c2|length }}">C2</th>
+            <th class="grp c2 sep-left-strong" colspan="{{ ns.c2|length }}">{{ level_labels.get("C2","C2") }}</th>
           {% endif %}
           {% if ns.c3|length > 0 %}
-            <th class="grp c3 sep-left-strong" colspan="{{ ns.c3|length }}">C3</th>
+            <th class="grp c3 sep-left-strong" colspan="{{ ns.c3|length }}">{{ level_labels.get("C3","C3") }}</th>
           {% endif %}
           {% if ns.c4|length > 0 %}
-            <th class="grp c4 sep-left-strong" colspan="{{ ns.c4|length }}">C4</th>
+            <th class="grp c4 sep-left-strong" colspan="{{ ns.c4|length }}">{{ level_labels.get("C4","C4") }}</th>
           {% endif %}
           {% if ns.other|length > 0 %}
             <th class="grp sep-left-strong" colspan="{{ ns.other|length }}"></th>

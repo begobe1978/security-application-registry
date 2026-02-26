@@ -246,7 +246,7 @@
       gap:8px;
     }
 
-    input, select{
+    input, select, textarea{
       width:100%;
       background:#fff;
       color:var(--text);
@@ -313,6 +313,19 @@
       background:rgba(220,38,38,.08);
       border:1px solid rgba(220,38,38,.18);
     }
+
+.field-error input,
+.field-error select,
+.field-error textarea{
+  border-color: var(--danger);
+  box-shadow: 0 0 0 3px rgba(220,38,38,.12);
+}
+.field-error .field-error-text{
+  color: var(--danger);
+  font-size: 12px;
+  margin-top: 6px;
+}
+
 
     .warnbox{
       border-left:3px solid rgba(217,119,6,.75);

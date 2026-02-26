@@ -67,13 +67,13 @@ def list_descendants_counts(path: str, level: str, human_id: str) -> Dict[str, i
         return counts
 
     if level == "C3":
-        c4 = read_sheet(path, "C4_Runtime")
+        c4 = read_sheet(path, "C4")
         if not c4.empty and "c3_human_id" in c4.columns:
             counts["C4"] = int((c4["c3_human_id"].astype(str).map(canon) == hid).sum())
         return counts
 
     if level == "C2":
-        c3 = read_sheet(path, "C3_Componentes")
+        c3 = read_sheet(path, "C3")
         if not c3.empty and "c2_human_id" in c3.columns:
             comps = c3[c3["c2_human_id"].astype(str).map(canon) == hid]
             counts["C3"] = int(len(comps))
@@ -81,13 +81,13 @@ def list_descendants_counts(path: str, level: str, human_id: str) -> Dict[str, i
         else:
             comp_ids = set()
 
-        c4 = read_sheet(path, "C4_Runtime")
+        c4 = read_sheet(path, "C4")
         if not c4.empty and "c3_human_id" in c4.columns and comp_ids:
             counts["C4"] = int(c4["c3_human_id"].astype(str).map(canon).isin(comp_ids).sum())
         return counts
 
     if level == "C1":
-        c2 = read_sheet(path, "C2_Aplicaciones")
+        c2 = read_sheet(path, "C2")
         if not c2.empty and "c1_human_id" in c2.columns:
             apps = c2[c2["c1_human_id"].astype(str).map(canon) == hid]
             counts["C2"] = int(len(apps))
@@ -95,7 +95,7 @@ def list_descendants_counts(path: str, level: str, human_id: str) -> Dict[str, i
         else:
             app_ids = set()
 
-        c3 = read_sheet(path, "C3_Componentes")
+        c3 = read_sheet(path, "C3")
         if not c3.empty and "c2_human_id" in c3.columns and app_ids:
             comps = c3[c3["c2_human_id"].astype(str).map(canon).isin(app_ids)]
             counts["C3"] = int(len(comps))
@@ -103,7 +103,7 @@ def list_descendants_counts(path: str, level: str, human_id: str) -> Dict[str, i
         else:
             comp_ids = set()
 
-        c4 = read_sheet(path, "C4_Runtime")
+        c4 = read_sheet(path, "C4")
         if not c4.empty and "c3_human_id" in c4.columns and comp_ids:
             counts["C4"] = int(c4["c3_human_id"].astype(str).map(canon).isin(comp_ids).sum())
 

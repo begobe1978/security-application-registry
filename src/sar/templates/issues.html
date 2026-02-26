@@ -26,10 +26,10 @@
         <label>level</label>
         <select name="level">
           <option value="">(all)</option>
-          <option value="C1" {% if level=="C1" %}selected{% endif %}>C1</option>
-          <option value="C2" {% if level=="C2" %}selected{% endif %}>C2</option>
-          <option value="C3" {% if level=="C3" %}selected{% endif %}>C3</option>
-          <option value="C4" {% if level=="C4" %}selected{% endif %}>C4</option>
+          <option value="C1" {% if level=="C1" %}selected{% endif %}>{{ level_labels.get("C1","C1") }}</option>
+          <option value="C2" {% if level=="C2" %}selected{% endif %}>{{ level_labels.get("C2","C2") }}</option>
+          <option value="C3" {% if level=="C3" %}selected{% endif %}>{{ level_labels.get("C3","C3") }}</option>
+          <option value="C4" {% if level=="C4" %}selected{% endif %}>{{ level_labels.get("C4","C4") }}</option>
         </select>
       </div>
 
@@ -90,7 +90,7 @@
               {% endif %}
             </td>
 
-            <td><span class="badge">{{r["level"]}}</span></td>
+            <td><span class="badge">{{ level_labels.get(r["level"], r["level"]) }}</span></td>
 
             <td style="font-family:var(--mono)">
               {% if r["human_id"] %}

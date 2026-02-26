@@ -9,7 +9,7 @@
 <div class="card">
   <div style="display:flex; justify-content:space-between; gap:14px; flex-wrap:wrap;">
     <div>
-      <h2 class="title">Ficha {{ level }} — <span style="font-family:var(--mono)">{{ human_id }}</span></h2>
+      <h2 class="title">Ficha {{ level_labels.get(level, level) }} — <span style="font-family:var(--mono)">{{ human_id }}</span></h2>
       <p class="subtitle">Origen: <b>{{ sheet }}</b> · Excel: <span style="font-family:var(--mono)">{{ path }}</span></p>
     </div>
 
@@ -24,11 +24,11 @@
         <a class="btn btn-ghost" href="/level/{{ level }}?parent={{ parent_ref }}">Ver hermanos</a>
       {% endif %}
       {% if level == "C1" %}
-        <a class="btn btn-ghost" href="/level/C2?parent={{ human_id }}">Ver C2 del proyecto</a>
+        <a class="btn btn-ghost" href="/level/C2?parent={{ human_id }}">Ver {{ level_labels.get("C2","C2") }} de {{ level_labels.get("C1","C1") }}</a>
       {% elif level == "C2" %}
-        <a class="btn btn-ghost" href="/level/C3?parent={{ human_id }}">Ver C3 de la app</a>
+        <a class="btn btn-ghost" href="/level/C3?parent={{ human_id }}">Ver {{ level_labels.get("C3","C3") }} de {{ level_labels.get("C2","C2") }}</a>
       {% elif level == "C3" %}
-        <a class="btn btn-ghost" href="/level/C4?parent={{ human_id }}">Ver C4 del componente</a>
+        <a class="btn btn-ghost" href="/level/C4?parent={{ human_id }}">Ver {{ level_labels.get("C4","C4") }} de {{ level_labels.get("C3","C3") }}</a>
       {% endif %}
 
       {% if level == "C4" %}
@@ -36,11 +36,11 @@
         <a class="btn btn-secondary" href="/report/c4/{{ human_id }}.html">Informe HTML</a>
       {% endif %}
       {% if level == "C1" %}
-        <a class="btn btn-primary" href="/create/C2?parent={{ human_id }}">Alta C2</a>
+        <a class="btn btn-primary" href="/create/C2?parent={{ human_id }}">Alta {{ level_labels.get("C2","C2") }}</a>
       {% elif level == "C2" %}
-        <a class="btn btn-primary" href="/create/C3?parent={{ human_id }}">Alta C3</a>
+        <a class="btn btn-primary" href="/create/C3?parent={{ human_id }}">Alta {{ level_labels.get("C3","C3") }}</a>
       {% elif level == "C3" %}
-        <a class="btn btn-primary" href="/create/C4?parent={{ human_id }}">Alta C4</a>
+        <a class="btn btn-primary" href="/create/C4?parent={{ human_id }}">Alta {{ level_labels.get("C4","C4") }}</a>
       {% endif %}
 
 
@@ -92,19 +92,19 @@
     <div style="margin-top:10px; display:grid; gap:10px;">
       <div class="kpi">
         <div style="display:flex; justify-content:space-between; align-items:baseline;">
-          <div class="muted" style="font-weight:900;">C2</div>
+          <div class="muted" style="font-weight:900;">{{ level_labels.get("C2","C2") }}</div>
           <div style="font-weight:900;">{{ desc_counts["C2"] }}</div>
         </div>
       </div>
       <div class="kpi">
         <div style="display:flex; justify-content:space-between; align-items:baseline;">
-          <div class="muted" style="font-weight:900;">C3</div>
+          <div class="muted" style="font-weight:900;">{{ level_labels.get("C3","C3") }}</div>
           <div style="font-weight:900;">{{ desc_counts["C3"] }}</div>
         </div>
       </div>
       <div class="kpi">
         <div style="display:flex; justify-content:space-between; align-items:baseline;">
-          <div class="muted" style="font-weight:900;">C4</div>
+          <div class="muted" style="font-weight:900;">{{ level_labels.get("C4","C4") }}</div>
           <div style="font-weight:900;">{{ desc_counts["C4"] }}</div>
         </div>
       </div>
@@ -213,7 +213,12 @@
         <tbody>
           {% for k, v in record.items() %}
             <tr class="{% if k in editable_fields %}row-editable{% else %}row-readonly{% endif %}">
-              <td style="font-family:var(--mono); color:var(--muted)">{{ k }}</td>
+              <td style="font-family:var(--mono); color:var(--muted)">
+                {{ k }}
+                {% if k == "vulnerabilities_detected" and (k not in editable_fields) %}
+                  <span class="pill" style="margin-left:6px;">heredado</span>
+                {% endif %}
+              </td>
               <td>
                 {% if k in editable_fields %}
                   {% if parent_col and k == parent_col %}
@@ -241,6 +246,11 @@
                   {% endif %}
                 {% else %}
                   <input class="input-readonly" value="{{ v|e }}" disabled />
+                  {% if k == "vulnerabilities_detected" %}
+                    <div class="muted" style="font-size:11px; margin-top:6px;">
+                      Se calcula automáticamente a partir de {{ level_labels.get("C3","C3") }}/{{ level_labels.get("C4","C4") }}.
+                    </div>
+                  {% endif %}
                 {% endif %}
               </td>
             </tr>

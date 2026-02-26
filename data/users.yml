@@ -1,6 +1,3 @@
 version: 1
 users:
-  peterusr:
-    role:
-    active:
-    password_hash:
+

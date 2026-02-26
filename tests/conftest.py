@@ -45,27 +45,27 @@ def tmp_registry(tmp_path: Path) -> Path:
         ws.append(row)
 
     # Minimal chain
-    write_row("C1_Proyectos", {"human_id": "PRJ-0001", "status": "active", "name": "Proyecto Uno"})
+    write_row("C1", {"human_id": "PRJ-0001", "status": "active", "name": "Proyecto Uno"})
     write_row(
-        "C2_Aplicaciones",
+        "C2",
         {"c1_human_id": "PRJ-0001", "human_id": "APP-0001", "status": "active", "name": "App Uno"},
     )
     write_row(
-        "C3_Componentes",
+        "C3",
         {"c2_human_id": "APP-0001", "human_id": "CMP-0001", "status": "active", "name": "Componente Uno"},
     )
     write_row(
-        "C4_Runtime",
+        "C4",
         {"c3_human_id": "CMP-0001", "human_id": "RUN-0001", "status": "active", "name": "Runtime Uno"},
     )
 
     # Siblings for context lists
     write_row(
-        "C3_Componentes",
+        "C3",
         {"c2_human_id": "APP-0001", "human_id": "CMP-0002", "status": "active", "name": "Componente Dos"},
     )
     write_row(
-        "C4_Runtime",
+        "C4",
         {"c3_human_id": "CMP-0001", "human_id": "RUN-0002", "status": "active", "name": "Runtime Dos"},
     )
 

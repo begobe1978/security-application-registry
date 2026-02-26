@@ -162,11 +162,11 @@
         <div style="font-family:var(--mono); font-size:12px;">{{ path }}</div>
       </div>
       <div class="row">
-        <a class="btn btn-primary" href="/create/C1">Crear C1 (Project)</a>
-        <a class="btn btn-ghost" href="/level/C1">Ver C1</a>
-        <a class="btn btn-ghost" href="/level/C2">Ver C2</a>
-        <a class="btn btn-ghost" href="/level/C3">Ver C3</a>
-        <a class="btn btn-ghost" href="/level/C4">Ver C4</a>
+        <a class="btn btn-primary" href="/create/C1">Crear {{ level_labels.get("C1","C1") }} </a>
+        <a class="btn btn-ghost" href="/level/C1">Ver {{ level_labels.get("C1","C1") }}</a>
+        <a class="btn btn-ghost" href="/level/C2">Ver {{ level_labels.get("C2","C2") }}</a>
+        <a class="btn btn-ghost" href="/level/C3">Ver {{ level_labels.get("C3","C3") }}</a>
+        <a class="btn btn-ghost" href="/level/C4">Ver {{ level_labels.get("C4","C4") }}</a>
         <a class="btn btn-secondary" href="/view-full">Abrir Full View</a>
         <a class="btn btn-secondary" href="/issues">Abrir Issues</a>
       </div>

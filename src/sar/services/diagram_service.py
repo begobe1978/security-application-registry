@@ -34,7 +34,8 @@ from typing import Dict, Iterable, List, Optional, Set, Tuple
 
 from sar.core.mapping import meta_for_level
 from sar.core.utils import canon
-from sar.infra.registry_repo import read_sheet
+from sar.infra.registry_repo import read_sheet, read_meta_dict
+from sar.core.mapping import level_labels_from_meta, DEFAULT_LEVEL_LABELS
 from sar.services.record_service import detect_level_meta
 
 
@@ -56,12 +57,13 @@ def _short(text: str, max_len: int = 60) -> str:
     return t[: max_len - 1].rstrip() + "…"
 
 
-def _label(level: str, human_id: str, name: str) -> str:
+def _label(level: str, human_id: str, name: str, level_labels: Dict[str, str]) -> str:
     hid = canon(human_id)
     nm = _short(name)
+    lvl = (level_labels or {}).get(level, level)
     if nm:
-        return f"{level} {hid}<br/>{nm}"
-    return f"{level} {hid}"
+        return f"{lvl} {hid}<br/>{nm}"
+    return f"{lvl} {hid}"
 
 
 @dataclass
@@ -159,10 +161,10 @@ def _build_indexes(path: str) -> Dict[str, Dict]:
       - children[level][parent_id] = list of child ids (canon)
     """
     # Sheet names
-    s1 = _sheet("C1", "C1_Proyectos")
-    s2 = _sheet("C2", "C2_Aplicaciones")
-    s3 = _sheet("C3", "C3_Componentes")
-    s4 = _sheet("C4", "C4_Runtime")
+    s1 = _sheet("C1", "C1")
+    s2 = _sheet("C2", "C2")
+    s3 = _sheet("C3", "C3")
+    s4 = _sheet("C4", "C4")
 
     df1 = read_sheet(path, s1)
     df2 = read_sheet(path, s2)
@@ -259,6 +261,9 @@ def _has_children(level: str, human_id: str, idx: Dict) -> bool:
 
 def build_record_diagram(path: str, human_id: str, max_nodes: int = 200) -> Tuple[str, Dict[str, object]]:
     """Return (mermaid_code, meta) for a registry record."""
+
+    meta_kv = read_meta_dict(path)
+    level_labels = level_labels_from_meta(meta_kv) if meta_kv else dict(DEFAULT_LEVEL_LABELS)
     meta = detect_level_meta(human_id)
     if not meta:
         return "", {"error": "human_id no reconocido", "truncated": False, "node_count": 0, "max_nodes": max_nodes}
@@ -272,7 +277,7 @@ def build_record_diagram(path: str, human_id: str, max_nodes: int = 200) -> Tupl
         b = _MermaidBuilder(max_nodes=max_nodes)
         nid = _safe_node_id(level, human_id)
         row = idx["rows"].get(level, {}).get(canon(human_id), {})
-        b.add_node(nid, _label(level, human_id, row.get("name", "")), css_class="focus")
+        b.add_node(nid, _label(level, human_id, row.get("name", ""), level_labels), css_class="focus")
         b.add_click(nid, f"/record/{canon(human_id)}")
         return b.render(focus_node_id=nid), {"truncated": b.truncated, "node_count": len(b.nodes), "max_nodes": b.max_nodes}
 
@@ -285,7 +290,7 @@ def build_record_diagram(path: str, human_id: str, max_nodes: int = 200) -> Tupl
             return None
         row = idx["rows"].get(level_, {}).get(hidc, {})
         nid = _safe_node_id(level_, hidc)
-        ok = b.add_node(nid, _label(level_, hidc, row.get("name", "")), css_class=css_class)
+        ok = b.add_node(nid, _label(level_, hidc, row.get("name", ""), level_labels), css_class=css_class)
         if not ok:
             return None
         b.add_click(nid, f"/record/{hidc}", "Abrir registro")

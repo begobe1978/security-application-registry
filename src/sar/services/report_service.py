@@ -17,6 +17,7 @@ import pandas as pd
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from sar.core.utils import canon
+from sar.core.mapping import level_labels_from_meta, DEFAULT_LEVEL_LABELS
 from sar.infra.registry_repo import read_meta_dict, read_sheet
 from sar.services.diagram_service import build_record_diagram
 
@@ -163,14 +164,14 @@ def generate_c4_chain_report_docx(
         raise ValueError("Este informe solo se genera desde un C4 (RUN-xxxx)")
 
     # Load sheets (raw)
-    c1 = read_sheet(rp, "C1_Proyectos")
-    c2 = read_sheet(rp, "C2_Aplicaciones")
-    c3 = read_sheet(rp, "C3_Componentes")
-    c4 = read_sheet(rp, "C4_Runtime")
+    c1 = read_sheet(rp, "C1")
+    c2 = read_sheet(rp, "C2")
+    c3 = read_sheet(rp, "C3")
+    c4 = read_sheet(rp, "C4")
 
     r4 = _get_row(c4, run_id)
     if not r4:
-        raise ValueError(f"No se encontró {run_id} en C4_Runtime")
+        raise ValueError(f"No se encontró {run_id} en C4")
     c3_id = canon(_safe_str(r4.get("c3_human_id", "")))
     r3 = _get_row(c3, c3_id) if c3_id else None
     if not r3:
@@ -208,6 +209,12 @@ def generate_c4_chain_report_docx(
     # Registry meta for footer/header
     meta = read_meta_dict(rp) or {}
 
+    level_labels = level_labels_from_meta(meta)
+    c1_label = level_labels.get('C1', DEFAULT_LEVEL_LABELS['C1'])
+    c2_label = level_labels.get('C2', DEFAULT_LEVEL_LABELS['C2'])
+    c3_label = level_labels.get('C3', DEFAULT_LEVEL_LABELS['C3'])
+    c4_label = level_labels.get('C4', DEFAULT_LEVEL_LABELS['C4'])
+
     # Render DOCX
     tpl_path = Path(template_docx_path).resolve()
     if not tpl_path.exists():
@@ -216,6 +223,11 @@ def generate_c4_chain_report_docx(
     doc = DocxTemplate(str(tpl_path))
     context: Dict[str, Any] = {
         "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
+        "level_labels": level_labels,
+        "c1_label": c1_label,
+        "c2_label": c2_label,
+        "c3_label": c3_label,
+        "c4_label": c4_label,
         "registry": {
             "path": rp,
             "schema_version": meta.get("schema_version", ""),
@@ -274,14 +286,14 @@ def generate_c4_chain_report_html(
         raise ValueError("Este informe solo se genera desde un C4 (RUN-xxxx)")
 
     # Load sheets (raw)
-    c1 = read_sheet(rp, "C1_Proyectos")
-    c2 = read_sheet(rp, "C2_Aplicaciones")
-    c3 = read_sheet(rp, "C3_Componentes")
-    c4 = read_sheet(rp, "C4_Runtime")
+    c1 = read_sheet(rp, "C1")
+    c2 = read_sheet(rp, "C2")
+    c3 = read_sheet(rp, "C3")
+    c4 = read_sheet(rp, "C4")
 
     r4 = _get_row(c4, run_id)
     if not r4:
-        raise ValueError(f"No se encontró {run_id} en C4_Runtime")
+        raise ValueError(f"No se encontró {run_id} en C4")
     c3_id = canon(_safe_str(r4.get("c3_human_id", "")))
     r3 = _get_row(c3, c3_id) if c3_id else None
     if not r3:
@@ -324,6 +336,12 @@ def generate_c4_chain_report_html(
     # Registry meta
     meta = read_meta_dict(rp) or {}
 
+    level_labels = level_labels_from_meta(meta)
+    c1_label = level_labels.get('C1', DEFAULT_LEVEL_LABELS['C1'])
+    c2_label = level_labels.get('C2', DEFAULT_LEVEL_LABELS['C2'])
+    c3_label = level_labels.get('C3', DEFAULT_LEVEL_LABELS['C3'])
+    c4_label = level_labels.get('C4', DEFAULT_LEVEL_LABELS['C4'])
+
     tpl_path = Path(template_html_path).resolve()
     if not tpl_path.exists():
         raise FileNotFoundError(f"No existe la plantilla: {tpl_path}")
@@ -336,6 +354,11 @@ def generate_c4_chain_report_html(
 
     context: Dict[str, Any] = {
         "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
+        "level_labels": level_labels,
+        "c1_label": c1_label,
+        "c2_label": c2_label,
+        "c3_label": c3_label,
+        "c4_label": c4_label,
         "registry": {
             "path": rp,
             "schema_version": meta.get("schema_version", ""),

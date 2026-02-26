@@ -10,10 +10,10 @@ REQUIRED_SHEETS = [
     "META",
     "LOOKUPS",
     "RULES",
-    "C1_Proyectos",
-    "C2_Aplicaciones",
-    "C3_Componentes",
-    "C4_Runtime",
+    "C1",
+    "C2",
+    "C3",
+    "C4",
 ]
 
 VULN_FIELD = "vulnerabilities_detected"
@@ -409,7 +409,7 @@ def validate_relations(
                     human_id=hid,
                     parent_ref=parent,
                     issue_type="orphan",
-                    message="Aplicación sin proyecto (C1) asociado o C1 inexistente",
+                    message="Registro sin padre asociado o padre inexistente",
                     suggested_fix="Rellenar c1_human_id con un PRJ existente"
                 ))
 
@@ -426,7 +426,7 @@ def validate_relations(
                     human_id=hid,
                     parent_ref=parent,
                     issue_type="orphan",
-                    message="Componente sin aplicación (C2) asociada o C2 inexistente",
+                    message="Registro sin padre asociado o padre inexistente",
                     suggested_fix="Rellenar c2_human_id con un APP existente"
                 ))
 
@@ -443,7 +443,7 @@ def validate_relations(
                     human_id=hid,
                     parent_ref=parent,
                     issue_type="orphan",
-                    message="Runtime sin componente (C3) asociado o C3 inexistente",
+                    message="Registro sin padre asociado o padre inexistente",
                     suggested_fix="Rellenar c3_human_id con un CMP existente"
                 ))
 
@@ -482,7 +482,7 @@ def normalize_and_derive_vulnerabilities(
                 parent_ref="",
                 issue_type="config_missing_field",
                 message=f"El motor soporta 'vulnerabilities_detected', pero el campo no existe en ninguna pestaña. Se omite su cálculo.",
-                suggested_fix=f"Crear la columna 'vulnerabilities_detected' en C3/C4 (y opcionalmente en C2/C1 para herencia) o eliminar su uso.",
+                suggested_fix=f"Crear la columna 'vulnerabilities_detected' en los niveles inferiores (y opcionalmente en niveles superiores para herencia) o eliminar su uso.",
             )
         )
         return {"C1": c1, "C2": c2, "C3": c3, "C4": c4}
@@ -834,7 +834,7 @@ def issues_to_df(issues: List[Issue]) -> pd.DataFrame:
 
 def compute(path: str) -> Tuple[pd.DataFrame, pd.DataFrame, Dict[str, pd.DataFrame]]:
     data = load_registry_xlsx(path)
-    c1, c2, c3, c4 = data["C1_Proyectos"], data["C2_Aplicaciones"], data["C3_Componentes"], data["C4_Runtime"]
+    c1, c2, c3, c4 = data["C1"], data["C2"], data["C3"], data["C4"]
     lookups = parse_lookups(data["LOOKUPS"])
 
     issues: List[Issue] = []

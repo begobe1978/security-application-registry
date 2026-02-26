@@ -29,6 +29,8 @@ from sar.infra.registry_repo import (
     add_missing_columns,
 )
 from sar.services.compute_service import regenerate_views
+from sar.infra.registry_repo import read_meta_dict
+from sar.core.mapping import level_labels_from_meta, DEFAULT_LEVEL_LABELS
 from sar.services.crud_service import update_record_existing_fields, add_new_field, create_record
 from sar.core.mapping import meta_for_level
 from sar.infra.registry_repo import generate_next_human_id
@@ -78,14 +80,16 @@ SCHEMA_SHEETS = [
     "META",
     "LOOKUPS",
     "RULES",
-    "C1_Proyectos",
-    "C2_Aplicaciones",
-    "C3_Componentes",
-    "C4_Runtime",
+    "C1",
+    "C2",
+    "C3",
+    "C4",
 ]
 
 STATE = {
     "path": "",
+    "level_labels": dict(DEFAULT_LEVEL_LABELS),
+    "meta": {},
     "view_full": pd.DataFrame(),
     "issues": pd.DataFrame(),
     "views_by_level": {},
@@ -96,6 +100,17 @@ STATE = {
 # Parent chain (child level -> parent level)
 PARENT_LEVEL = {"C2": "C1", "C3": "C2", "C4": "C3"}
 
+
+def _set_active_registry(path: str) -> None:
+    """Set active registry path and refresh META-derived presentation settings."""
+    STATE["path"] = path
+    try:
+        STATE["meta"] = read_meta_dict(STATE["path"])
+        STATE["level_labels"] = level_labels_from_meta(STATE["meta"])
+    except Exception:
+        # Keep fallbacks if META is missing/corrupt; core engine should still work.
+        STATE["meta"] = {}
+        STATE["level_labels"] = dict(DEFAULT_LEVEL_LABELS)
 
 def _ensure_registry_loaded() -> bool:
     return bool(STATE.get("path")) and os.path.exists(STATE["path"])
@@ -176,15 +191,17 @@ def _schema_state() -> dict:
     return out
 
 
-def _render(request: Request, template_name: str, ctx: dict):
+def _render(request: Request, template_name: str, ctx: dict, status_code: int = 200):
     """TemplateResponse wrapper injecting global UI state."""
     base_ctx = {
         "request": request,
         "schema": _schema_state(),
         "current_user": getattr(request.state, "user", None),
+        "level_labels": STATE.get("level_labels") or dict(DEFAULT_LEVEL_LABELS),
+        "meta": STATE.get("meta") or {},
     }
     merged = {**base_ctx, **(ctx or {})}
-    return templates.TemplateResponse(template_name, merged)
+    return templates.TemplateResponse(template_name, merged, status_code=status_code)
 
 
 
@@ -334,7 +351,7 @@ def open_last(user=Depends(require_user)):
         p = _latest_xlsx_in_data_dir()
         if not p:
             raise ValueError("No se ha encontrado ningún .xlsx en /data.")
-        STATE["path"] = p
+        _set_active_registry(p)
         view_full, issues, views_by_level = regenerate_views(STATE["path"])
         STATE["view_full"] = view_full
         STATE["issues"] = issues
@@ -374,7 +391,7 @@ def reset_registry_from_template(user=Depends(require_role("admin"))):
             },
         )
 
-        STATE["path"] = str(out_path.resolve())
+        _set_active_registry(str(out_path.resolve()))
         view_full, issues, views_by_level = regenerate_views(STATE["path"])
         STATE["view_full"] = view_full
         STATE["issues"] = issues
@@ -498,7 +515,7 @@ async def regenerate(
                 raise ValueError("La ruta indicada no existe.")
             chosen_path = p
 
-        STATE["path"] = chosen_path
+        _set_active_registry(chosen_path)
         view_full, issues, views_by_level = regenerate_views(STATE["path"])
         STATE["view_full"] = view_full
         STATE["issues"] = issues
@@ -692,21 +709,21 @@ def list_level(
     counts_c4_by_c3 = {}
 
     if level_code in ("C1",):
-        c2 = read_sheet(path, "C2_Aplicaciones")
+        c2 = read_sheet(path, "C2")
         if c2 is not None and not c2.empty and "c1_human_id" in c2.columns:
             counts_c2_by_c1 = (
                 c2.assign(__k=c2["c1_human_id"].astype(str).map(canon)).groupby("__k").size().to_dict()
             )
 
     if level_code in ("C2",):
-        c3 = read_sheet(path, "C3_Componentes")
+        c3 = read_sheet(path, "C3")
         if c3 is not None and not c3.empty and "c2_human_id" in c3.columns:
             counts_c3_by_c2 = (
                 c3.assign(__k=c3["c2_human_id"].astype(str).map(canon)).groupby("__k").size().to_dict()
             )
 
     if level_code in ("C3",):
-        c4 = read_sheet(path, "C4_Runtime")
+        c4 = read_sheet(path, "C4")
         if c4 is not None and not c4.empty and "c3_human_id" in c4.columns:
             counts_c4_by_c3 = (
                 c4.assign(__k=c4["c3_human_id"].astype(str).map(canon)).groupby("__k").size().to_dict()
@@ -1130,6 +1147,74 @@ async def report_c4_html(request: Request, human_id: str, user=Depends(require_u
 
 
 
+
+
+
+def _parse_form_fields(form) -> dict:
+    """Normalize Starlette form into a simple {str:str} dict (single-value fields)."""
+    return {str(k): ("" if v is None else str(v)).strip() for k, v in (form or {}).items()}
+
+
+def _validate_create_fields(meta: dict, fields: dict) -> dict:
+    """Return field-level errors for creation forms."""
+    errors = {}
+    if not (fields.get("name", "").strip()):
+        errors["name"] = "Obligatorio."
+    parent_col = meta.get("parent_col")
+    if parent_col and not (fields.get(parent_col, "").strip()):
+        errors[parent_col] = f"Obligatorio para {meta.get('level','')}."
+    return errors
+
+
+def _render_create_form(
+    request: Request,
+    meta: dict,
+    *,
+    fields: dict | None = None,
+    errors: dict | None = None,
+    form_error: str = "",
+    status_code: int = 200,
+):
+    """Render creation form with sticky values + field errors."""
+    sheet = meta["sheet"]
+    df = read_sheet(STATE["path"], sheet)
+    cols = [c for c in df.columns.tolist() if c != "human_id"]
+
+    read_only_cols = set()
+    if meta["level"] in ("C1", "C2"):
+        read_only_cols.add("vulnerabilities_detected")
+
+    # Defaults / prefill
+    prefill = {}
+    parent_col = meta.get("parent_col")
+    if parent_col:
+        prefill[parent_col] = (fields or {}).get(parent_col, "").strip()
+    prefill.setdefault("status", "draft")
+
+    lookups = lookup_options_by_level(STATE["path"], meta["level"])
+
+    values = dict(prefill)
+    if fields:
+        values.update(fields)
+
+    return _render(
+        request,
+        "create_form.html",
+        {
+            "request": request,
+            "level": meta["level"],
+            "sheet": sheet,
+            "columns": cols,
+            "read_only_cols": sorted(list(read_only_cols)),
+            "parent_col": parent_col or "",
+            "prefill": prefill,
+            "values": values,
+            "errors": errors or {},
+            "form_error": form_error,
+            "lookups": lookups,
+        },
+        status_code=status_code,
+    )
 @app.get("/create/{level}", response_class=HTMLResponse)
 def create_form(request: Request, level: str, parent: str = "", user=Depends(require_role("editor"))):
     """Render creation form for a given level (C1-C4)."""
@@ -1141,40 +1226,25 @@ def create_form(request: Request, level: str, parent: str = "", user=Depends(req
         STATE["last_error"] = f"Nivel '{level}' no reconocido. Usa C1, C2, C3 o C4."
         return RedirectResponse(url="/", status_code=303)
 
-    sheet = meta["sheet"]
-    df = read_sheet(STATE["path"], sheet)
-    cols = [c for c in df.columns.tolist() if c != "human_id"]
-
-    # Prefill parent reference if provided and applicable
+    fields = {}
     parent_col = meta.get("parent_col")
-    prefill = {}
     if parent_col:
-        prefill[parent_col] = (parent or "").strip()
+        fields[parent_col] = (parent or "").strip()
 
-    # Defaults
-    prefill.setdefault("status", "draft")
+    # Clear any previous global error banner; create errors are rendered inline now.
+    STATE["last_error"] = ""
 
-    lookups = lookup_options_by_level(STATE["path"], meta["level"])
+    return _render_create_form(request, meta, fields=fields, errors={}, form_error="")
 
-    return _render(
-        request,
-        "create_form.html",
-        {
-            "request": request,
-            "level": meta["level"],
-            "sheet": sheet,
-            "columns": cols,
-            "parent_col": parent_col or "",
-            "prefill": prefill,
-            "lookups": lookups,
-            "last_error": STATE.get("last_error", ""),
-        },
-    )
+
 
 
 @app.post("/create/{level}/preview", response_class=HTMLResponse)
 async def create_preview(request: Request, level: str, user=Depends(require_role("editor"))):
-    """Preview creation (two-step confirmation) without writing to Excel."""
+    """Preview creation (two-step confirmation) without writing to Excel.
+
+    On validation errors, re-render the form with sticky values and field-level messages.
+    """
     if not _ensure_registry_loaded():
         return RedirectResponse(url="/", status_code=303)
 
@@ -1183,24 +1253,27 @@ async def create_preview(request: Request, level: str, user=Depends(require_role
         STATE["last_error"] = f"Nivel '{level}' no reconocido. Usa C1, C2, C3 o C4."
         return RedirectResponse(url="/", status_code=303)
 
+    form = await request.form()
+    fields = _parse_form_fields(form)
+
+    # Prevent forbidden derived fields being submitted from the browser
+    if meta.get("level") in ("C1", "C2"):
+        fields.pop("vulnerabilities_detected", None)
+
+    errors = _validate_create_fields(meta, fields)
+    if errors:
+        return _render_create_form(
+            request,
+            meta,
+            fields=fields,
+            errors=errors,
+            form_error="Revisa los campos marcados.",
+            status_code=400,
+        )
+
     try:
-        form = await request.form()
-        fields = {str(k): ("" if v is None else str(v)).strip() for k, v in form.items()}
-
-        # Minimal validations (same as create)
-        name = fields.get("name", "").strip()
-        if not name:
-            raise ValueError("El campo 'name' es obligatorio.")
-
-        parent_col = meta.get("parent_col")
-        if parent_col:
-            if not fields.get(parent_col, "").strip():
-                raise ValueError(f"El campo '{parent_col}' es obligatorio para {meta['level']}.")
-
         # Predict next id for display (not a reservation)
         next_id = generate_next_human_id(STATE["path"], meta["sheet"], meta["prefix"])
-
-        STATE["last_error"] = ""
         return _render(
             request,
             "create_confirm.html",
@@ -1213,24 +1286,26 @@ async def create_preview(request: Request, level: str, user=Depends(require_role
             },
         )
     except Exception as e:
-        STATE["last_error"] = str(e)
-        # redirect back to form (keep parent if present)
-        parent = ""
-        pc = meta.get("parent_col")
-        if pc:
-            try:
-                parent = (await request.form()).get(pc, "") or ""
-            except Exception:
-                parent = ""
-        url = f"/create/{meta['level']}"
-        if parent:
-            url += f"?parent={parent}"
-        return RedirectResponse(url=url, status_code=303)
+        # Technical errors (e.g. reading registry) should still keep the user's input.
+        return _render_create_form(
+            request,
+            meta,
+            fields=fields,
+            errors={},
+            form_error=str(e),
+            status_code=400,
+        )
+
+
+
 
 
 @app.post("/create/{level}")
 async def create_confirm(request: Request, level: str, user=Depends(require_role("editor"))):
-    """Confirm and create the record in Excel."""
+    """Confirm and create the record in Excel.
+
+    On validation/creation errors, re-render the form with sticky values.
+    """
     if not _ensure_registry_loaded():
         return RedirectResponse(url="/", status_code=303)
 
@@ -1239,10 +1314,25 @@ async def create_confirm(request: Request, level: str, user=Depends(require_role
         STATE["last_error"] = f"Nivel '{level}' no reconocido. Usa C1, C2, C3 o C4."
         return RedirectResponse(url="/", status_code=303)
 
-    try:
-        form = await request.form()
-        fields = {str(k): ("" if v is None else str(v)).strip() for k, v in form.items()}
+    form = await request.form()
+    fields = _parse_form_fields(form)
 
+    # Prevent forbidden derived fields being submitted from the browser
+    if meta.get("level") in ("C1", "C2"):
+        fields.pop("vulnerabilities_detected", None)
+
+    errors = _validate_create_fields(meta, fields)
+    if errors:
+        return _render_create_form(
+            request,
+            meta,
+            fields=fields,
+            errors=errors,
+            form_error="Revisa los campos marcados.",
+            status_code=400,
+        )
+
+    try:
         new_id, view_full, issues, views_by_level = create_record(path=STATE["path"], level=meta["level"], fields=fields)
         STATE["view_full"] = view_full
         STATE["issues"] = issues
@@ -1253,16 +1343,17 @@ async def create_confirm(request: Request, level: str, user=Depends(require_role
         return RedirectResponse(url=f"/record/{canon(new_id)}", status_code=303)
 
     except Exception as e:
-        STATE["last_error"] = str(e)
-        # back to form
-        parent = ""
-        pc = meta.get("parent_col")
-        if pc:
-            parent = fields.get(pc, "")
-        url = f"/create/{meta['level']}"
-        if parent:
-            url += f"?parent={parent}"
-        return RedirectResponse(url=url, status_code=303)
+        # Keep sticky values on any failure (validation, IO, etc.)
+        return _render_create_form(
+            request,
+            meta,
+            fields=fields,
+            errors={},
+            form_error=str(e),
+            status_code=400,
+        )
+
+
 
 
 

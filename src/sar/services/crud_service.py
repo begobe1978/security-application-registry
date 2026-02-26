@@ -29,10 +29,10 @@ SCHEMA_SHEETS = [
     "META",
     "LOOKUPS",
     "RULES",
-    "C1_Proyectos",
-    "C2_Aplicaciones",
-    "C3_Componentes",
-    "C4_Runtime",
+    "C1",
+    "C2",
+    "C3",
+    "C4",
 ]
 
 
@@ -71,9 +71,11 @@ def update_record_existing_fields(*, path: str, human_id: str, fields: Dict[str,
     if not meta:
         raise ValueError(f"human_id '{human_id}' no reconocido (prefijo no soportado).")
 
-    # vulnerabilities_detected is derived in C1/C2 and must not be manually editable
+    # vulnerabilities_detected is derived in C1/C2 and must not be manually editable.
+    # Be forgiving: ignore if it comes from UI autofill/old forms instead of failing the whole update.
     if meta.get("level") in ("C1", "C2") and "vulnerabilities_detected" in fields:
-        raise ValueError("'vulnerabilities_detected' no es editable en C1/C2 (se hereda de C3/C4).")
+        fields = dict(fields)
+        fields.pop("vulnerabilities_detected", None)
 
     # If the parent field is being updated, validate it exists (prevents typos).
     parent_col = meta.get("parent_col")
@@ -132,9 +134,11 @@ def create_record(*, path: str, level: str, fields: Dict[str, Any]) -> tuple[str
     if not meta:
         raise ValueError(f"Nivel '{level}' no reconocido. Usa C1, C2, C3 o C4.")
 
-    # vulnerabilities_detected is only writable in C3/C4
+    # vulnerabilities_detected is only writable in C3/C4.
+    # Be forgiving on create too (clients might submit disabled inputs or cached fields).
     if meta.get("level") in ("C1", "C2") and "vulnerabilities_detected" in fields:
-        raise ValueError("'vulnerabilities_detected' no es editable en C1/C2 (se hereda de C3/C4).")
+        fields = dict(fields)
+        fields.pop("vulnerabilities_detected", None)
 
     sheet = meta["sheet"]
     prefix = meta["prefix"]

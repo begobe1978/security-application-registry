@@ -9,7 +9,7 @@
 <div class="card">
   <div style="display:flex; justify-content:space-between; gap:14px; flex-wrap:wrap;">
     <div>
-      <h2 class="title">Alta {{ level }}</h2>
+      <h2 class="title">Alta {{ level_labels.get(level, level) }}</h2>
       <p class="subtitle">Se creará un nuevo registro en <b>{{ sheet }}</b>.</p>
     </div>
     <div style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;">
@@ -19,8 +19,8 @@
   </div>
 </div>
 
-{% if last_error %}
-<div class="errorbox" style="margin-top:12px;"><strong>Error:</strong> {{ last_error }}</div>
+{% if form_error %}
+<div class="errorbox" style="margin-top:12px;"><strong>Error:</strong> {{ form_error }}</div>
 {% endif %}
 
 <br>
@@ -29,7 +29,7 @@
   <form method="post" action="/create/{{ level }}/preview">
     <div class="grid grid-2">
       {% for col in columns %}
-        <div>
+        <div class="{% if errors and errors.get(col) %}field-error{% endif %}">
           <div class="muted" style="margin-bottom:6px;">
             {{ col }}
             {% if parent_col and col == parent_col %}
@@ -38,27 +38,39 @@
             {% if col == "name" %}
               <span class="pill pill-warn" style="margin-left:6px;">obligatorio</span>
             {% endif %}
+            {% if read_only_cols and (col in read_only_cols) %}
+              <span class="pill" style="margin-left:6px;">heredado</span>
+            {% endif %}
           </div>
 
-          {% if parent_col and col == parent_col %}
+          {% if read_only_cols and (col in read_only_cols) %}
+            <input class="input" value="{{ values.get(col, prefill.get(col,"")) }}" placeholder="Se calcula automáticamente" disabled>
+            <div class="muted" style="font-size:11px; margin-top:6px;">
+              Este campo no se edita en {{ level_labels.get(level, level) }}: se deriva de niveles inferiores.
+            </div>
+
+          {% elif parent_col and col == parent_col %}
             <div class="ac" data-ac="1" data-child-level="{{ level }}">
-              <input class="input" name="{{ col }}" value="{{ prefill.get(col,"") }}" placeholder="Buscar {{ col }}…" autocomplete="off" data-ac-input="1">
+              <input class="input" name="{{ col }}" value="{{ values.get(col, prefill.get(col,"")) }}" placeholder="Buscar {{ col }}…" autocomplete="off" data-ac-input="1">
               <div class="ac-results" data-ac-results="1" style="display:none;"></div>
               <div class="muted" style="font-size:11px; margin-top:6px;">
                 Escribe para buscar (por ID o nombre) y selecciona una opción.
               </div>
             </div>
           {% elif col == "description" %}
-            <textarea class="input" name="{{ col }}" rows="3" placeholder="{{ col }}">{{ prefill.get(col,"") }}</textarea>
+            <textarea class="input" name="{{ col }}" rows="3" placeholder="{{ col }}">{{ values.get(col, prefill.get(col,"")) }}</textarea>
           {% elif lookups.get(col) %}
             <select class="input" name="{{ col }}">
               <option value="">—</option>
               {% for opt in lookups.get(col, []) %}
-                <option value="{{ opt.value }}" {% if prefill.get(col,"") == opt.value %}selected{% endif %}>{{ opt.value }}{% if opt.label and opt.label != opt.value %} — {{ opt.label }}{% endif %}</option>
+                <option value="{{ opt.value }}" {% if values.get(col, prefill.get(col,"")) == opt.value %}selected{% endif %}>{{ opt.value }}{% if opt.label and opt.label != opt.value %} — {{ opt.label }}{% endif %}</option>
               {% endfor %}
             </select>
           {% else %}
-            <input class="input" name="{{ col }}" value="{{ prefill.get(col,"") }}" placeholder="{{ col }}">
+            <input class="input" name="{{ col }}" value="{{ values.get(col, prefill.get(col,"")) }}" placeholder="{{ col }}">
+          {% endif %}
+          {% if errors and errors.get(col) %}
+            <div class="field-error-text">{{ errors.get(col) }}</div>
           {% endif %}
         </div>
       {% endfor %}

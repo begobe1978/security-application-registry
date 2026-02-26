@@ -7,7 +7,7 @@
 {% block content %}
 
 <div class="card">
-  <h2 class="title">Listado {{ level }} — {{ sheet }}</h2>
+  <h2 class="title">Listado {{ level_labels.get(level, level) }}</h2>
   <p class="subtitle">Vista por nivel (hoja del Excel). Incluye huérfanos y registros sin descendencia.</p>
 
   <form method="get" action="/level/{{ level }}">
@@ -80,9 +80,9 @@
         {% endfor %}
 
         {% if has_parent %}<th>orphan</th>{% endif %}
-        {% if level == "C1" %}<th>#C2</th>{% endif %}
-        {% if level == "C2" %}<th>#C3</th>{% endif %}
-        {% if level == "C3" %}<th>#C4</th>{% endif %}
+        {% if level == "C1" %}<th>#{{ level_labels.get("C2","C2") }}</th>{% endif %}
+        {% if level == "C2" %}<th>#{{ level_labels.get("C3","C3") }}</th>{% endif %}
+        {% if level == "C3" %}<th>#{{ level_labels.get("C4","C4") }}</th>{% endif %}
       </tr>
     </thead>
 

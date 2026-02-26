@@ -1,0 +1,2 @@
+[console_scripts]
+sar = sar.__main__:main

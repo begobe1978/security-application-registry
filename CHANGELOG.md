@@ -115,3 +115,43 @@
 - Passwords are no longer stored in plaintext
 - Sessions are signed and time-limited
 - Server-side role checks enforced for mutating endpoints
+
+
+## [0.4.0] - 2026-02-26
+
+### Added
+- Configurable level display labels via META:
+  - `C1_label`
+  - `C2_label`
+  - `C3_label`
+  - `C4_label`
+- UI and reports now use dynamic labels from the active registry.
+- Safe fallback to default structural labels (C1–C4) if META keys are missing.
+
+### Changed
+- Excel sheets renamed to structural-only names:
+  - `C1`
+  - `C2`
+  - `C3`
+  - `C4`
+- Removed semantic coupling from sheet names (e.g. `C1_Proyectos`).
+- Updated engine, repository layer, templates, and tests to rely strictly on structural level names.
+- Centralized registry activation logic to:
+  - Reload META
+  - Recompute level display labels
+  - Refresh labels correctly after:
+    - `POST /regenerate`
+    - `GET /open-last`
+    - Template → registry reset
+- On validation error during C-level record creation (C1–C4), the server now re-renders the same form (no redirect) preserving submitted values.
+
+### Fixed
+- Fixed issue where form inputs were cleared when validation failed while creating a C-level record.
+- Users no longer lose previously entered data if one field contains an error.
+
+### Notes
+- Clear separation between:
+  - Structural hierarchy (C1–C4) → internal engine logic
+  - Domain semantics (Project/App/etc.) → presentation layer
+- The system is now a context-agnostic hierarchical engine with configurable domain semantics defined at the Excel level.
+- Improved UX by preventing perceived data loss during validation failures.

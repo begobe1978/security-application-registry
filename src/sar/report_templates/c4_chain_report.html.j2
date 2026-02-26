@@ -44,7 +44,7 @@
     <div class="wrap">
       <div class="header">
         <div>
-          <h1>SAR — Informe C4 ({{ c4.human_id }})</h1>
+          <h1>SAR — Informe {{ c4_label }} ({{ c4.human_id }})</h1>
           <div class="sub">Generado: <span class="mono">{{ generated_at }}</span> · Excel: <span class="mono">{{ registry.path }}</span></div>
           <div class="sub">Schema: <span class="mono">{{ registry.schema_version }}</span> · Template: <span class="mono">{{ registry.template_version }}</span></div>
         </div>
@@ -62,20 +62,20 @@
 
       <div class="grid">
         <div class="card">
-          <div class="title">Cadena C1 → C4</div>
+          <div class="title">Cadena {{ c1_label }} → {{ c4_label }}</div>
           <div class="kv">
-            <div class="k">C1</div><div class="v"><span class="pill">{{ c1.human_id }}</span> {{ c1.name }} <span class="sub">({{ c1.status }})</span></div>
-            <div class="k">C2</div><div class="v"><span class="pill">{{ c2.human_id }}</span> {{ c2.name }} <span class="sub">({{ c2.status }})</span></div>
-            <div class="k">C3</div><div class="v"><span class="pill">{{ c3.human_id }}</span> {{ c3.name }} <span class="sub">({{ c3.status }})</span></div>
-            <div class="k">C4</div><div class="v"><span class="pill">{{ c4.human_id }}</span> {{ c4.name }} <span class="sub">({{ c4.status }})</span></div>
+            <div class="k">{{ c1_label }}</div><div class="v"><span class="pill">{{ c1.human_id }}</span> {{ c1.name }} <span class="sub">({{ c1.status }})</span></div>
+            <div class="k">{{ c2_label }}</div><div class="v"><span class="pill">{{ c2.human_id }}</span> {{ c2.name }} <span class="sub">({{ c2.status }})</span></div>
+            <div class="k">{{ c3_label }}</div><div class="v"><span class="pill">{{ c3.human_id }}</span> {{ c3.name }} <span class="sub">({{ c3.status }})</span></div>
+            <div class="k">{{ c4_label }}</div><div class="v"><span class="pill">{{ c4.human_id }}</span> {{ c4.name }} <span class="sub">({{ c4.status }})</span></div>
           </div>
         </div>
 
         <div class="card">
           <div class="title">Contexto</div>
-          <div class="sub" style="margin-bottom:8px;">Elementos hermanos (para entender el entorno del C4).</div>
+          <div class="sub" style="margin-bottom:8px;">Elementos hermanos (para entender el entorno del {{ c4_label }}).</div>
           <div class="hr"></div>
-          <div class="k" style="margin-bottom:6px;">Componentes (C3) en la misma aplicación (C2)</div>
+          <div class="k" style="margin-bottom:6px;">{{ c3_label }} en la misma {{ c2_label }}</div>
           {% if components and components|length > 0 %}
             <table>
               <thead><tr><th>human_id</th><th>name</th><th>status</th></tr></thead>
@@ -89,7 +89,7 @@
             <div class="sub">—</div>
           {% endif %}
           <div class="hr"></div>
-          <div class="k" style="margin-bottom:6px;">Runtimes (C4) del mismo componente (C3)</div>
+          <div class="k" style="margin-bottom:6px;">{{ c4_label }} del mismo {{ c3_label }}</div>
           {% if runtimes and runtimes|length > 0 %}
             <table>
               <thead><tr><th>human_id</th><th>name</th><th>status</th></tr></thead>
@@ -112,7 +112,7 @@
         {% endif %}
 
         {% if diagram.png_ok and diagram.png_data_uri %}
-          <img src="{{ diagram.png_data_uri }}" alt="Diagrama C4" />
+          <img src="{{ diagram.png_data_uri }}" alt="Diagrama" />
           <div class="sub" style="margin-top:8px;">(Renderizado a PNG con Mermaid CLI.)</div>
         {% else %}
           <div class="alert" style="margin-bottom:10px;">No se pudo renderizar el PNG localmente ({{ diagram.png_error }}). Se incluye el Mermaid embebido.</div>
@@ -128,7 +128,7 @@
         <div class="title">Issues (por nivel)</div>
         {% for lvl in ["C1","C2","C3","C4"] %}
           <div style="margin-top:10px;">
-            <div class="sub" style="font-weight:900;">{{ lvl }}</div>
+            <div class="sub" style="font-weight:900;">{{ level_labels.get(lvl, lvl) }}</div>
             {% set rows = issues[lvl] %}
             {% if rows and rows|length > 0 %}
               <div style="display:grid; gap:10px; margin-top:8px;">
