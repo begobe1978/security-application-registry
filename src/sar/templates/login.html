@@ -11,6 +11,7 @@
   {% endif %}
 
   <form method="post" action="/login">
+    <input type="hidden" name="{{ csrf_field_name }}" value="{{ csrf_token }}">
     <input type="hidden" name="next" value="{{ next or '/' }}"/>
 
     <div style="display:grid; gap:10px; max-width:420px;">

@@ -14,7 +14,7 @@
 
   <div class="kv" style="margin-top:14px;">
     <div class="k">Registro</div>
-    <div class="v" style="font-family:var(--mono)">{{ human_id }}</div>
+    <div class="v" style="font-family:var(--mono)">{{ id }}</div>
 
     <div class="k">Nuevo campo</div>
     <div class="v" style="font-family:var(--mono)">{{ field_name }}</div>
@@ -29,9 +29,10 @@
   </div>
 
   <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:16px; flex-wrap:wrap;">
-    <a class="btn btn-ghost" href="/record/{{ human_id }}">Cancelar</a>
+    <a class="btn btn-ghost" href="/record/{{ id }}">Cancelar</a>
 
-    <form method="post" action="/record/{{ human_id }}/add-field">
+    <form method="post" action="/record/{{ id }}/add-field">
+      <input type="hidden" name="{{ csrf_field_name }}" value="{{ csrf_token }}">
       <input type="hidden" name="field_name" value="{{ field_name }}">
       <input type="hidden" name="value" value="{{ value }}">
       <button class="btn btn-primary" type="submit">Confirmar creación</button>

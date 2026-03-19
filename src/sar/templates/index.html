@@ -26,6 +26,7 @@
   <br>
 
   <form method="post" action="/regenerate" enctype="multipart/form-data">
+    <input type="hidden" name="{{ csrf_field_name }}" value="{{ csrf_token }}">
     <div class="row">
       <div class="field" style="flex:1; min-width:320px;">
         <label>Seleccionar registry.xlsx (recomendado)</label>
@@ -105,14 +106,17 @@
 
     <div class="row" style="margin-top:12px; gap:10px; flex-wrap:wrap;">
       <form method="post" action="/registry/reset-from-template">
+        <input type="hidden" name="{{ csrf_field_name }}" value="{{ csrf_token }}">
         <button class="btn btn-secondary" type="submit">Crear registry desde plantilla</button>
       </form>
       <form method="post" action="/template/promote">
+        <input type="hidden" name="{{ csrf_field_name }}" value="{{ csrf_token }}">
         <button class="btn btn-primary" type="submit" {% if not schema.added %}disabled{% endif %}>
           Promover campos del registry a plantilla
         </button>
       </form>
       <form method="post" action="/template/migrate-registry">
+        <input type="hidden" name="{{ csrf_field_name }}" value="{{ csrf_token }}">
         <button class="btn btn-ghost" type="submit" {% if not schema.missing %}disabled{% endif %}>
           Migrar registry (añadir columnas faltantes)
         </button>
@@ -153,25 +157,6 @@
     </div>
   </div>
 
-  <br>
-
-  <div class="card">
-    <div class="row" style="justify-content:space-between;">
-      <div>
-        <div class="muted">Archivo activo</div>
-        <div style="font-family:var(--mono); font-size:12px;">{{ path }}</div>
-      </div>
-      <div class="row">
-        <a class="btn btn-primary" href="/create/C1">Crear {{ level_labels.get("C1","C1") }} </a>
-        <a class="btn btn-ghost" href="/level/C1">Ver {{ level_labels.get("C1","C1") }}</a>
-        <a class="btn btn-ghost" href="/level/C2">Ver {{ level_labels.get("C2","C2") }}</a>
-        <a class="btn btn-ghost" href="/level/C3">Ver {{ level_labels.get("C3","C3") }}</a>
-        <a class="btn btn-ghost" href="/level/C4">Ver {{ level_labels.get("C4","C4") }}</a>
-        <a class="btn btn-secondary" href="/view-full">Abrir Full View</a>
-        <a class="btn btn-secondary" href="/issues">Abrir Issues</a>
-      </div>
-    </div>
-  </div>
 {% endif %}
 
 {% endblock %}

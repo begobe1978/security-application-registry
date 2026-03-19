@@ -13,7 +13,7 @@ def test_generate_report_docx_creates_file(tmp_registry, report_template_path, n
     _, issues, _ = compute(str(tmp_registry))
     out = generate_c4_chain_report_docx(
         registry_path=str(tmp_registry),
-        run_human_id="RUN-0001",
+        run_id="C4-0001",
         issues_df=issues,
         template_docx_path=str(report_template_path),
         out_dir=str(tmp_path),
@@ -26,7 +26,7 @@ def test_generate_report_docx_creates_file(tmp_registry, report_template_path, n
     # Light content check: document contains the main runtime ID somewhere
     doc = Document(str(out_path))
     text = "\n".join(p.text for p in doc.paragraphs)
-    assert "RUN-0001" in text
+    assert "C4-0001" in text
 
 
 def test_generate_report_html_creates_file(tmp_registry, no_mmdc, tmp_path):
@@ -37,7 +37,7 @@ def test_generate_report_html_creates_file(tmp_registry, no_mmdc, tmp_path):
 
     out = generate_c4_chain_report_html(
         registry_path=str(tmp_registry),
-        run_human_id="RUN-0001",
+        run_id="C4-0001",
         issues_df=issues,
         template_html_path=str(html_tpl),
         out_dir=str(tmp_path),
@@ -47,4 +47,4 @@ def test_generate_report_html_creates_file(tmp_registry, no_mmdc, tmp_path):
     assert out_path.exists()
     html = out_path.read_text(encoding="utf-8")
     assert "<!doctype html>" in html.lower()
-    assert "RUN-0001" in html
+    assert "C4-0001" in html

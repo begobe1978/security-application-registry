@@ -106,10 +106,10 @@ La hoja RULES permite definir reglas declarativas por nivel (C1–C4).
 
 ### Validaciones Core
 Independientemente de LOOKUPS y RULES, SAR aplica siempre validaciones estructurales mínimas:
-- human_id
+- id
 - status
 - name
-- referencias jerárquicas (c1_human_id, c2_human_id, c3_human_id)
+- referencias jerárquicas (c1_id, c2_id, c3_id)
 - coherencia del modelo C1 → C2 → C3 → C4
 
 Estas validaciones son prioritarias y no dependen del contenido dinámico del Excel.

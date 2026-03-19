@@ -1,3 +1,10 @@
 version: 1
 users:
-
+  peterusr:
+    role: admin
+    active: true
+    password_hash: $argon2id$v=19$m=65536,t=3,p=4$ScfSsYC+SGOPabGpG5hx8w$Xw7NDlxiSLmjwTvclSw8eEoRHJU0oTOHOAJO4/2D2kY
+  ber:
+    role: viewer
+    active: true
+    password_hash: $argon2id$v=19$m=65536,t=3,p=4$e6mt4aBCQCE8sBgBO5mLtA$wKsF+Kc79Ps6A6/JIY55Vv1BpxsIlrZc/G8yO5HUUt8

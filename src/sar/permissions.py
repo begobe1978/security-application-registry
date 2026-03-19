@@ -6,6 +6,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from typing import Optional
+from urllib.parse import urlencode
 
 from fastapi import HTTPException, Request
 
@@ -50,7 +51,7 @@ def require_user(request: Request) -> CurrentUser:
     next_url = str(request.url.path)
     if request.url.query:
         next_url += "?" + request.url.query
-    loc = f"/login?next={next_url}"
+    loc = "/login?" + urlencode({"next": next_url})
     raise HTTPException(status_code=303, headers={"Location": loc})
 
 
@@ -65,5 +66,9 @@ def require_role(min_role: str):
 
 
 def cookie_settings() -> dict:
-    secure = os.getenv("SAR_COOKIE_SECURE", "false").lower() in {"1", "true", "yes", "y"}
-    return {"httponly": True, "samesite": "lax", "secure": secure}
+    secure_env = os.getenv("SAR_COOKIE_SECURE", "true").strip().lower()
+    secure = secure_env not in {"0", "false", "no", "n"}
+    samesite = os.getenv("SAR_COOKIE_SAMESITE", "lax").strip().lower() or "lax"
+    if samesite not in {"lax", "strict", "none"}:
+        samesite = "lax"
+    return {"httponly": True, "samesite": samesite, "secure": secure, "path": "/"}

@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>SAR — Informe {{ c4.human_id }}</title>
+    <title>SAR — Informe {{ c4.id }}</title>
     <style>
       :root{--bg:#f6f7fb;--card:#ffffff;--text:#111827;--muted:#6b7280;--border:#e5e7eb;--mono:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;}
       *{box-sizing:border-box}
@@ -44,7 +44,7 @@
     <div class="wrap">
       <div class="header">
         <div>
-          <h1>SAR — Informe {{ c4_label }} ({{ c4.human_id }})</h1>
+          <h1>SAR — Informe {{ c4_label }} ({{ c4.id }})</h1>
           <div class="sub">Generado: <span class="mono">{{ generated_at }}</span> · Excel: <span class="mono">{{ registry.path }}</span></div>
           <div class="sub">Schema: <span class="mono">{{ registry.schema_version }}</span> · Template: <span class="mono">{{ registry.template_version }}</span></div>
         </div>
@@ -64,10 +64,10 @@
         <div class="card">
           <div class="title">Cadena {{ c1_label }} → {{ c4_label }}</div>
           <div class="kv">
-            <div class="k">{{ c1_label }}</div><div class="v"><span class="pill">{{ c1.human_id }}</span> {{ c1.name }} <span class="sub">({{ c1.status }})</span></div>
-            <div class="k">{{ c2_label }}</div><div class="v"><span class="pill">{{ c2.human_id }}</span> {{ c2.name }} <span class="sub">({{ c2.status }})</span></div>
-            <div class="k">{{ c3_label }}</div><div class="v"><span class="pill">{{ c3.human_id }}</span> {{ c3.name }} <span class="sub">({{ c3.status }})</span></div>
-            <div class="k">{{ c4_label }}</div><div class="v"><span class="pill">{{ c4.human_id }}</span> {{ c4.name }} <span class="sub">({{ c4.status }})</span></div>
+            <div class="k">{{ c1_label }}</div><div class="v"><span class="pill">{{ c1.id }}</span> {{ c1.name }} <span class="sub">({{ c1.status }})</span></div>
+            <div class="k">{{ c2_label }}</div><div class="v"><span class="pill">{{ c2.id }}</span> {{ c2.name }} <span class="sub">({{ c2.status }})</span></div>
+            <div class="k">{{ c3_label }}</div><div class="v"><span class="pill">{{ c3.id }}</span> {{ c3.name }} <span class="sub">({{ c3.status }})</span></div>
+            <div class="k">{{ c4_label }}</div><div class="v"><span class="pill">{{ c4.id }}</span> {{ c4.name }} <span class="sub">({{ c4.status }})</span></div>
           </div>
         </div>
 
@@ -78,10 +78,10 @@
           <div class="k" style="margin-bottom:6px;">{{ c3_label }} en la misma {{ c2_label }}</div>
           {% if components and components|length > 0 %}
             <table>
-              <thead><tr><th>human_id</th><th>name</th><th>status</th></tr></thead>
+              <thead><tr><th>id</th><th>name</th><th>status</th></tr></thead>
               <tbody>
                 {% for r in components %}
-                  <tr><td class="mono">{{ r.human_id }}</td><td>{{ r.name }}</td><td>{{ r.status }}</td></tr>
+                  <tr><td class="mono">{{ r.id }}</td><td>{{ r.name }}</td><td>{{ r.status }}</td></tr>
                 {% endfor %}
               </tbody>
             </table>
@@ -92,10 +92,10 @@
           <div class="k" style="margin-bottom:6px;">{{ c4_label }} del mismo {{ c3_label }}</div>
           {% if runtimes and runtimes|length > 0 %}
             <table>
-              <thead><tr><th>human_id</th><th>name</th><th>status</th></tr></thead>
+              <thead><tr><th>id</th><th>name</th><th>status</th></tr></thead>
               <tbody>
                 {% for r in runtimes %}
-                  <tr><td class="mono">{{ r.human_id }}</td><td>{{ r.name }}</td><td>{{ r.status }}</td></tr>
+                  <tr><td class="mono">{{ r.id }}</td><td>{{ r.name }}</td><td>{{ r.status }}</td></tr>
                 {% endfor %}
               </tbody>
             </table>

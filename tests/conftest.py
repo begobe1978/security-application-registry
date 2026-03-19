@@ -15,9 +15,9 @@ def tmp_registry(tmp_path: Path) -> Path:
     """
     Create a minimal, valid registry.xlsx in a temporary directory based on the shipped template.
     Includes:
-      - 1 chain: PRJ-0001 -> APP-0001 -> CMP-0001 -> RUN-0001
-      - 1 C3 sibling: CMP-0002 (same APP)
-      - 1 C4 sibling: RUN-0002 (same CMP-0001)
+      - 1 chain: C1-0001 -> C2-0001 -> C3-0001 -> C4-0001
+      - 1 C3 sibling: C3-0002 (same APP)
+      - 1 C4 sibling: C4-0002 (same C3-0001)
     """
     # Use the repository template as base
     repo_root = Path(__file__).resolve().parents[1]
@@ -45,28 +45,28 @@ def tmp_registry(tmp_path: Path) -> Path:
         ws.append(row)
 
     # Minimal chain
-    write_row("C1", {"human_id": "PRJ-0001", "status": "active", "name": "Proyecto Uno"})
+    write_row("C1", {"id": "C1-0001", "status": "active", "name": "Proyecto Uno"})
     write_row(
         "C2",
-        {"c1_human_id": "PRJ-0001", "human_id": "APP-0001", "status": "active", "name": "App Uno"},
+        {"c1_id": "C1-0001", "id": "C2-0001", "status": "active", "name": "App Uno"},
     )
     write_row(
         "C3",
-        {"c2_human_id": "APP-0001", "human_id": "CMP-0001", "status": "active", "name": "Componente Uno"},
+        {"c2_id": "C2-0001", "id": "C3-0001", "status": "active", "name": "Componente Uno"},
     )
     write_row(
         "C4",
-        {"c3_human_id": "CMP-0001", "human_id": "RUN-0001", "status": "active", "name": "Runtime Uno"},
+        {"c3_id": "C3-0001", "id": "C4-0001", "status": "active", "name": "Runtime Uno"},
     )
 
     # Siblings for context lists
     write_row(
         "C3",
-        {"c2_human_id": "APP-0001", "human_id": "CMP-0002", "status": "active", "name": "Componente Dos"},
+        {"c2_id": "C2-0001", "id": "C3-0002", "status": "active", "name": "Componente Dos"},
     )
     write_row(
         "C4",
-        {"c3_human_id": "CMP-0001", "human_id": "RUN-0002", "status": "active", "name": "Runtime Dos"},
+        {"c3_id": "C3-0001", "id": "C4-0002", "status": "active", "name": "Runtime Dos"},
     )
 
     wb.save(reg_path)

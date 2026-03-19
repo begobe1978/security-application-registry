@@ -176,7 +176,7 @@ Vista operativa (1 fila = 1 runtime). Incluye todos los campos de {{ level_label
                               c == (ns.c3[0] if ns.c3|length>0 else '') or
                               c == (ns.c4[0] if ns.c4|length>0 else '') or
                               c == (ns.other[0] if ns.other|length>0 else '') %}sep-left{% endif %}">
-                {% if c.endswith("__human_id") and v %}
+                {% if c.endswith("__id") and v %}
                   <a href="/record/{{ v }}" style="font-family:var(--mono); color:var(--accent); font-weight:900;">
                     {{ v }}
                   </a>

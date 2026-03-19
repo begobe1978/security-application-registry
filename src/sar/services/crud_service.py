@@ -10,7 +10,7 @@ from sar.infra.registry_repo import (
     update_fields_existing,
     add_new_field_column,
     append_row_existing_columns,
-    generate_next_human_id,
+    generate_next_id,
     read_sheet,
     write_meta_kv,
     get_schema_map,
@@ -20,7 +20,8 @@ from sar.services.compute_service import regenerate_views
 from sar.services.record_service import detect_level_meta
 from sar.core.mapping import meta_for_level
 from sar.core.utils import canon
-from sar.services.record_service import get_row_by_human_id
+from sar.core.schema import required_fields_for_level
+from sar.services.record_service import get_row_by_id
 
 
 PARENT_LEVEL = {"C2": "C1", "C3": "C2", "C4": "C3"}
@@ -57,19 +58,19 @@ def _validate_parent_ref_exists(*, path: str, child_level: str, parent_ref: str)
     if not pmeta:
         raise ValueError(f"No se pudo resolver el nivel parent '{pl}'.")
     pdf = read_sheet(path, pmeta["sheet"])
-    if get_row_by_human_id(pdf, pref) is None:
+    if get_row_by_id(pdf, pref) is None:
         raise ValueError(f"Parent '{canon(pref)}' no existe en '{pmeta['sheet']}'.")
 
 
-def update_record_existing_fields(*, path: str, human_id: str, fields: Dict[str, Any]):
+def update_record_existing_fields(*, path: str, id: str, fields: Dict[str, Any]):
     """Update existing fields for a record, backing up and regenerating views.
 
     This is the first CRUD step: it only allows updating columns that already
     exist in the underlying Excel sheet.
     """
-    meta = detect_level_meta(human_id)
+    meta = detect_level_meta(id)
     if not meta:
-        raise ValueError(f"human_id '{human_id}' no reconocido (prefijo no soportado).")
+        raise ValueError(f"id '{id}' no reconocido (prefijo no soportado).")
 
     # vulnerabilities_detected is derived in C1/C2 and must not be manually editable.
     # Be forgiving: ignore if it comes from UI autofill/old forms instead of failing the whole update.
@@ -84,25 +85,25 @@ def update_record_existing_fields(*, path: str, human_id: str, fields: Dict[str,
 
     # Safety first
     backup_registry(path)
-    update_fields_existing(path, meta["sheet"], human_id, fields)
+    update_fields_existing(path, meta["sheet"], id, fields)
 
     # Recompute derived views after each write
     return regenerate_views(path)
 
 
-def add_new_field(*, path: str, human_id: str, field_name: str, value: Any):
+def add_new_field(*, path: str, id: str, field_name: str, value: Any):
     """Add a new column (field) to the corresponding sheet and set its value for this record.
 
     This is intentionally a separate operation from updates to avoid creating columns by typo.
     - If the field already exists (by normalised header), this raises an error.
     - A backup is created and derived views are regenerated.
     """
-    meta = detect_level_meta(human_id)
+    meta = detect_level_meta(id)
     if not meta:
-        raise ValueError(f"human_id '{human_id}' no reconocido (prefijo no soportado).")
+        raise ValueError(f"id '{id}' no reconocido (prefijo no soportado).")
 
     backup_registry(path)
-    add_new_field_column(path, meta["sheet"], human_id, field_name, value)
+    add_new_field_column(path, meta["sheet"], id, field_name, value)
 
     # Mark schema dirty on the working registry (template promotion is a separate step)
     try:
@@ -124,11 +125,11 @@ def add_new_field(*, path: str, human_id: str, field_name: str, value: Any):
 def create_record(*, path: str, level: str, fields: Dict[str, Any]) -> tuple[str, Any, Any, Any]:
     """Create a new record for a given level (C1-C4) in the Excel registry.
 
-    - Generates a new human_id for the level.
+    - Generates a new id for the level.
     - Writes only existing columns (no auto-creation of new fields).
     - Creates a backup and regenerates derived views.
 
-    Returns: (new_human_id, view_full_df, issues_df)
+    Returns: (new_id, view_full_df, issues_df)
     """
     meta = meta_for_level(level)
     if not meta:
@@ -144,27 +145,30 @@ def create_record(*, path: str, level: str, fields: Dict[str, Any]) -> tuple[str
     prefix = meta["prefix"]
     parent_col = meta.get("parent_col")
 
-    # Minimal required fields
-    name = str(fields.get("name", "") or "").strip()
-    if not name:
-        raise ValueError("El campo 'name' es obligatorio.")
+    # Minimal required fields (centralised structural validation)
+    missing_required = []
+    for col in required_fields_for_level(meta["level"]):
+        if col == "id":
+            continue
+        if not str(fields.get(col, "") or "").strip():
+            missing_required.append(col)
+    if missing_required:
+        first = missing_required[0]
+        raise ValueError(f"El campo '{first}' es obligatorio para {meta['level']}.")
 
+    name = str(fields.get("name", "") or "").strip()
+    parent_ref = str(fields.get(parent_col, "") or "").strip() if parent_col else ""
     if parent_col:
-        parent_ref = str(fields.get(parent_col, "") or "").strip()
-        if not parent_ref:
-            raise ValueError(f"El campo '{parent_col}' es obligatorio para {meta['level']}.")
         _validate_parent_ref_exists(path=path, child_level=meta.get("level", ""), parent_ref=parent_ref)
-    else:
-        parent_ref = ""
 
     # Status default
     status = str(fields.get("status", "") or "").strip() or "draft"
 
     # Generate new id
-    new_hid = generate_next_human_id(path, sheet, prefix)
+    new_hid = generate_next_id(path, sheet, prefix)
 
     row = dict(fields)
-    row["human_id"] = new_hid
+    row["id"] = new_hid
     row["status"] = status
     row["name"] = name
     if parent_col:

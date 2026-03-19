@@ -20,8 +20,8 @@ def _norm_key(s: str) -> str:
     return str(s or "").strip().replace(" ", "_").replace("-", "_").lower()
 
 
-def update_fields_existing(path: str, sheet: str, human_id: str, fields: dict[str, object]) -> None:
-    """Update one or more existing columns for a row identified by human_id.
+def update_fields_existing(path: str, sheet: str, id: str, fields: dict[str, object]) -> None:
+    """Update one or more existing columns for a row identified by id.
 
     - Only updates columns that already exist in the sheet header.
     - Uses openpyxl to preserve formatting.
@@ -43,8 +43,8 @@ def update_fields_existing(path: str, sheet: str, human_id: str, fields: dict[st
             continue
         headers[_norm_key(v)] = col
 
-    if "human_id" not in headers:
-        raise ValueError(f"La pestaña '{sheet}' no tiene columna 'human_id'.")
+    if "id" not in headers:
+        raise ValueError(f"La pestaña '{sheet}' no tiene columna 'id'.")
 
     # Validate fields exist
     missing = [k for k in fields.keys() if _norm_key(k) not in headers]
@@ -56,8 +56,8 @@ def update_fields_existing(path: str, sheet: str, human_id: str, fields: dict[st
         )
 
     # Find row
-    col_hid = headers["human_id"]
-    target = canon(human_id)
+    col_hid = headers["id"]
+    target = canon(id)
     found_row = None
     for row in range(2, ws.max_row + 1):
         v = ws.cell(row=row, column=col_hid).value
@@ -66,7 +66,7 @@ def update_fields_existing(path: str, sheet: str, human_id: str, fields: dict[st
             break
 
     if not found_row:
-        raise ValueError(f"No se encontró '{human_id}' en '{sheet}'.")
+        raise ValueError(f"No se encontró '{id}' en '{sheet}'.")
 
     # Write updates
     for key, value in fields.items():
@@ -76,8 +76,8 @@ def update_fields_existing(path: str, sheet: str, human_id: str, fields: dict[st
     wb.save(path)
 
 
-def add_new_field_column(path: str, sheet: str, human_id: str, field_name: str, value: object) -> None:
-    """Add a brand-new column to a sheet and set its value for the given human_id.
+def add_new_field_column(path: str, sheet: str, id: str, field_name: str, value: object) -> None:
+    """Add a brand-new column to a sheet and set its value for the given id.
 
     - The column must NOT already exist (checked by canon/normalisation).
     - Uses openpyxl to preserve formatting.
@@ -100,16 +100,16 @@ def add_new_field_column(path: str, sheet: str, human_id: str, field_name: str, 
             continue
         headers[_norm_key(v)] = col
 
-    if "human_id" not in headers:
-        raise ValueError(f"La pestaña '{sheet}' no tiene columna 'human_id'.")
+    if "id" not in headers:
+        raise ValueError(f"La pestaña '{sheet}' no tiene columna 'id'.")
 
     key = _norm_key(field_name)
     if key in headers:
         raise ValueError(f"El campo '{field_name}' ya existe en '{sheet}'.")
 
     # Find row
-    col_hid = headers["human_id"]
-    target = canon(human_id)
+    col_hid = headers["id"]
+    target = canon(id)
     found_row = None
     for row in range(2, ws.max_row + 1):
         v = ws.cell(row=row, column=col_hid).value
@@ -118,7 +118,7 @@ def add_new_field_column(path: str, sheet: str, human_id: str, field_name: str, 
             break
 
     if not found_row:
-        raise ValueError(f"No se encontró '{human_id}' en '{sheet}'.")
+        raise ValueError(f"No se encontró '{id}' en '{sheet}'.")
 
     # Append new column at the end
     new_col = ws.max_column + 1
@@ -130,10 +130,10 @@ def add_new_field_column(path: str, sheet: str, human_id: str, field_name: str, 
 
 
 
-def generate_next_human_id(path: str, sheet: str, prefix: str) -> str:
-    """Generate the next sequential human_id for a given sheet/prefix.
+def generate_next_id(path: str, sheet: str, prefix: str) -> str:
+    """Generate the next sequential id for a given sheet/prefix.
 
-    This scans existing human_id values and returns PREFIX-### using 3-digit padding.
+    This scans existing id values and returns PREFIX-### using 3-digit padding.
     """
     wb = load_workbook(path, read_only=True)
     if sheet not in wb.sheetnames:
@@ -147,10 +147,10 @@ def generate_next_human_id(path: str, sheet: str, prefix: str) -> str:
         if v is None:
             continue
         headers[_norm_key(v)] = col
-    if "human_id" not in headers:
-        raise ValueError(f"La pestaña '{sheet}' no tiene columna 'human_id'.")
+    if "id" not in headers:
+        raise ValueError(f"La pestaña '{sheet}' no tiene columna 'id'.")
 
-    col_hid = headers["human_id"]
+    col_hid = headers["id"]
     max_n = 0
     pref = canon(prefix)
     for row in range(2, ws.max_row + 1):
@@ -187,11 +187,11 @@ def append_row_existing_columns(path: str, sheet: str, row: dict[str, object]) -
             continue
         headers[_norm_key(v)] = col
 
-    if "human_id" not in headers:
-        raise ValueError(f"La pestaña '{sheet}' no tiene columna 'human_id'.")
+    if "id" not in headers:
+        raise ValueError(f"La pestaña '{sheet}' no tiene columna 'id'.")
 
-    # Find last data row by scanning human_id column (avoid trailing formatted rows)
-    col_hid = headers["human_id"]
+    # Find last data row by scanning id column (avoid trailing formatted rows)
+    col_hid = headers["id"]
     last = 1
     for r in range(2, ws.max_row + 1):
         v = ws.cell(row=r, column=col_hid).value
@@ -199,14 +199,14 @@ def append_row_existing_columns(path: str, sheet: str, row: dict[str, object]) -
             last = r
     new_row = last + 1
 
-    # Ensure unique human_id
-    new_hid = canon(str(row.get("human_id", "")))
+    # Ensure unique id
+    new_hid = canon(str(row.get("id", "")))
     if not new_hid:
-        raise ValueError("El registro nuevo debe incluir 'human_id'.")
+        raise ValueError("El registro nuevo debe incluir 'id'.")
     for r in range(2, last + 1):
         v = ws.cell(row=r, column=col_hid).value
         if canon(str(v or "")) == new_hid:
-            raise ValueError(f"Ya existe un registro con human_id '{row.get('human_id')}' en '{sheet}'.")
+            raise ValueError(f"Ya existe un registro con id '{row.get('id')}' en '{sheet}'.")
 
     # Write values for existing columns only
     for key, value in row.items():
@@ -417,8 +417,8 @@ def backup_registry(path: str) -> str:
     return str(dst)
 
 
-def set_status(path: str, sheet: str, human_id: str, new_status: str) -> None:
-    """Update status cell for a row identified by human_id.
+def set_status(path: str, sheet: str, id: str, new_status: str) -> None:
+    """Update status cell for a row identified by id.
 
     Uses openpyxl to preserve formatting.
     """
@@ -436,15 +436,15 @@ def set_status(path: str, sheet: str, human_id: str, new_status: str) -> None:
         key = str(v).strip().replace(" ", "_").replace("-", "_").lower()
         headers[key] = col
 
-    if "human_id" not in headers:
-        raise ValueError(f"La pestaña '{sheet}' no tiene columna 'human_id'.")
+    if "id" not in headers:
+        raise ValueError(f"La pestaña '{sheet}' no tiene columna 'id'.")
     if "status" not in headers:
         raise ValueError(f"La pestaña '{sheet}' no tiene columna 'status'.")
 
-    col_hid = headers["human_id"]
+    col_hid = headers["id"]
     col_status = headers["status"]
 
-    target = canon(human_id)
+    target = canon(id)
     found_row = None
     for row in range(2, ws.max_row + 1):
         v = ws.cell(row=row, column=col_hid).value
@@ -453,7 +453,7 @@ def set_status(path: str, sheet: str, human_id: str, new_status: str) -> None:
             break
 
     if not found_row:
-        raise ValueError(f"No se encontró '{human_id}' en '{sheet}'.")
+        raise ValueError(f"No se encontró '{id}' en '{sheet}'.")
 
     ws.cell(row=found_row, column=col_status).value = new_status
     wb.save(path)

@@ -25,7 +25,7 @@ def test_report_endpoint_returns_docx(tmp_registry, report_template_path, no_mmd
     app_module.STATE["views_by_level"] = views_by_level
 
     client = TestClient(app_module.app)
-    r = client.get("/report/c4/RUN-0001.docx")
+    r = client.get("/report/c4/C4-0001.docx")
     assert r.status_code == 200
     assert r.headers["content-type"].startswith(
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -50,7 +50,7 @@ def test_report_endpoint_returns_html(tmp_registry, tmp_path, monkeypatch):
     app_module.STATE["views_by_level"] = views_by_level
 
     client = TestClient(app_module.app)
-    r = client.get("/report/c4/RUN-0001.html")
+    r = client.get("/report/c4/C4-0001.html")
     assert r.status_code == 200
     assert r.headers["content-type"].startswith("text/html")
-    assert "RUN-0001" in r.text
+    assert "C4-0001" in r.text

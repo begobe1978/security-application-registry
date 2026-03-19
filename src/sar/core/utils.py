@@ -4,10 +4,12 @@
 from __future__ import annotations
 
 import io
-from typing import Iterable
+from typing import Iterable, Optional
 
 import pandas as pd
 from fastapi.responses import StreamingResponse
+
+from sar.core.schema import normalize_header
 
 
 def canon(s: str) -> str:
@@ -16,15 +18,9 @@ def canon(s: str) -> str:
 
 
 def normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
-    """Normalise dataframe column names to a stable snake_case-like lower format."""
+    """Normalise dataframe column names using the registry schema aliases."""
     df = df.copy()
-    df.columns = (
-        pd.Index(df.columns)
-        .map(lambda c: str(c).strip())
-        .map(lambda c: c.replace(" ", "_"))
-        .map(lambda c: c.replace("-", "_"))
-        .map(lambda c: c.lower())
-    )
+    df.columns = pd.Index(df.columns).map(normalize_header)
     return df
 
 
@@ -40,6 +36,38 @@ def first_existing_col(df: pd.DataFrame, *candidates: str) -> str:
         if c in df.columns:
             return c
     return ""
+
+
+def level_list_columns(
+    df: pd.DataFrame,
+    *,
+    id_col: str = "id",
+    parent_col: Optional[str] = None,
+    limit: int = 8,
+    show_all: bool = False,
+) -> list[str]:
+    """Build ordered columns for level list views.
+
+    The limited view always keeps the structural columns first (`id` and the
+    parent reference column for the level, when present). The remaining visible
+    columns follow the workbook order exactly, without hardcoded business
+    semantics.
+    """
+    if df is None:
+        return []
+
+    all_cols = [c for c in df.columns.tolist() if str(c) != "__orphan"]
+    if show_all:
+        return all_cols
+
+    base_cols = [c for c in [id_col, parent_col] if c and c in all_cols]
+    base_cols = list(dict.fromkeys(base_cols))
+
+    remaining_cols = [c for c in all_cols if c not in base_cols]
+    limit = max(0, int(limit or 0))
+    if len(base_cols) >= limit:
+        return base_cols[:limit]
+    return base_cols + remaining_cols[: max(0, limit - len(base_cols))]
 
 
 def df_to_csv_stream(df: pd.DataFrame) -> StreamingResponse:

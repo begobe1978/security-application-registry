@@ -37,18 +37,18 @@ def _safe_str(v: Any) -> str:
 def _row_min(row: Dict[str, Any]) -> Dict[str, str]:
     """Return only required fields, stringified."""
     return {
-        "human_id": _safe_str(row.get("human_id", "")).strip(),
+        "id": _safe_str(row.get("id", "")).strip(),
         "name": _safe_str(row.get("name", "")).strip(),
         "status": _safe_str(row.get("status", "")).strip(),
     }
 
 
-def _get_row(df: pd.DataFrame, human_id: str) -> Optional[Dict[str, Any]]:
-    if df is None or df.empty or "human_id" not in df.columns:
+def _get_row(df: pd.DataFrame, id: str) -> Optional[Dict[str, Any]]:
+    if df is None or df.empty or "id" not in df.columns:
         return None
-    hid = canon(human_id)
+    hid = canon(id)
     tmp = df.copy()
-    tmp["__hid"] = tmp["human_id"].astype(str).map(canon)
+    tmp["__hid"] = tmp["id"].astype(str).map(canon)
     hit = tmp[tmp["__hid"] == hid]
     if hit.empty:
         return None
@@ -56,25 +56,25 @@ def _get_row(df: pd.DataFrame, human_id: str) -> Optional[Dict[str, Any]]:
 
 
 def _list_children_min(df: pd.DataFrame, parent_col: str, parent_hid: str) -> List[Dict[str, str]]:
-    if df is None or df.empty or "human_id" not in df.columns or parent_col not in df.columns:
+    if df is None or df.empty or "id" not in df.columns or parent_col not in df.columns:
         return []
     pid = canon(parent_hid)
     tmp = df.copy()
     tmp["__pid"] = tmp[parent_col].astype(str).map(canon)
     tmp = tmp[tmp["__pid"] == pid].drop(columns=["__pid"])
     out = [_row_min(r.to_dict()) for _, r in tmp.iterrows()]
-    out.sort(key=lambda x: canon(x.get("human_id", "")))
+    out.sort(key=lambda x: canon(x.get("id", "")))
     return out
 
 
-def _issues_for_id(issues_df: pd.DataFrame, human_id: str) -> List[Dict[str, str]]:
-    """Issues for a record (match by human_id or parent_ref)."""
+def _issues_for_id(issues_df: pd.DataFrame, id: str) -> List[Dict[str, str]]:
+    """Issues for a record (match by id or parent_ref)."""
     if issues_df is None or issues_df.empty:
         return []
-    hid = canon(human_id)
+    hid = canon(id)
     df = issues_df.copy()
     for c in [
-        "human_id",
+        "id",
         "parent_ref",
         "severity",
         "level",
@@ -84,7 +84,7 @@ def _issues_for_id(issues_df: pd.DataFrame, human_id: str) -> List[Dict[str, str
     ]:
         if c not in df.columns:
             df[c] = ""
-    df["__hid"] = df["human_id"].astype(str).map(canon)
+    df["__hid"] = df["id"].astype(str).map(canon)
     df["__pid"] = df["parent_ref"].astype(str).map(canon)
     hit = df[(df["__hid"] == hid) | (df["__pid"] == hid)].drop(columns=["__hid", "__pid"])
     if hit.empty:
@@ -136,15 +136,15 @@ def _try_render_mermaid_png(mermaid_code: str, out_png: Path) -> Tuple[bool, str
 def generate_c4_chain_report_docx(
     *,
     registry_path: str,
-    run_human_id: str,
+    run_id: str,
     issues_df: pd.DataFrame,
     template_docx_path: str,
     out_dir: str,
     max_nodes: int = 200,
 ) -> Path:
-    """Generate a Word report for a C4 record (RUN-xxx).
+    """Generate a Word report for a C4 record (C4-xxx).
 
-    The report uses only required fields for records (human_id, name, status),
+    The report uses only required fields for records (id, name, status),
     includes the same Mermaid diagram as the UI, and a final section with
     issues for the main chain grouped by level.
     """
@@ -159,9 +159,9 @@ def generate_c4_chain_report_docx(
             "Instálala (pip install docxtpl) o usa el Informe HTML."
         ) from e
     rp = str(Path(registry_path).resolve())
-    run_id = canon(run_human_id)
-    if not run_id.startswith("RUN-"):
-        raise ValueError("Este informe solo se genera desde un C4 (RUN-xxxx)")
+    run_id = canon(run_id)
+    if not run_id.startswith("C4-"):
+        raise ValueError("Este informe solo se genera desde un C4 (C4-xxxx)")
 
     # Load sheets (raw)
     c1 = read_sheet(rp, "C1")
@@ -172,22 +172,22 @@ def generate_c4_chain_report_docx(
     r4 = _get_row(c4, run_id)
     if not r4:
         raise ValueError(f"No se encontró {run_id} en C4")
-    c3_id = canon(_safe_str(r4.get("c3_human_id", "")))
+    c3_id = canon(_safe_str(r4.get("c3_id", "")))
     r3 = _get_row(c3, c3_id) if c3_id else None
     if not r3:
         raise ValueError(f"Cadena rota: C3 '{c3_id}' no encontrado")
-    c2_id = canon(_safe_str(r3.get("c2_human_id", "")))
+    c2_id = canon(_safe_str(r3.get("c2_id", "")))
     r2 = _get_row(c2, c2_id) if c2_id else None
     if not r2:
         raise ValueError(f"Cadena rota: C2 '{c2_id}' no encontrado")
-    c1_id = canon(_safe_str(r2.get("c1_human_id", "")))
+    c1_id = canon(_safe_str(r2.get("c1_id", "")))
     r1 = _get_row(c1, c1_id) if c1_id else None
     if not r1:
         raise ValueError(f"Cadena rota: C1 '{c1_id}' no encontrado")
 
     # Lists (context)
-    components = _list_children_min(c3, "c2_human_id", c2_id)
-    runtimes = _list_children_min(c4, "c3_human_id", c3_id)
+    components = _list_children_min(c3, "c2_id", c2_id)
+    runtimes = _list_children_min(c4, "c3_id", c3_id)
 
     # Diagram (same as UI)
     mermaid_code, diagram_meta = build_record_diagram(rp, run_id, max_nodes=max_nodes)
@@ -265,13 +265,13 @@ def generate_c4_chain_report_docx(
 def generate_c4_chain_report_html(
     *,
     registry_path: str,
-    run_human_id: str,
+    run_id: str,
     issues_df: pd.DataFrame,
     template_html_path: str,
     out_dir: str,
     max_nodes: int = 200,
 ) -> Path:
-    """Generate an HTML report for a C4 record (RUN-xxx).
+    """Generate an HTML report for a C4 record (C4-xxx).
 
     The HTML report mirrors the Word report structure and uses the same derived
     context (chain, siblings, Mermaid diagram, issues by level).
@@ -281,9 +281,9 @@ def generate_c4_chain_report_html(
       - Otherwise, Mermaid code is embedded and rendered client-side via Mermaid JS.
     """
     rp = str(Path(registry_path).resolve())
-    run_id = canon(run_human_id)
-    if not run_id.startswith("RUN-"):
-        raise ValueError("Este informe solo se genera desde un C4 (RUN-xxxx)")
+    run_id = canon(run_id)
+    if not run_id.startswith("C4-"):
+        raise ValueError("Este informe solo se genera desde un C4 (C4-xxxx)")
 
     # Load sheets (raw)
     c1 = read_sheet(rp, "C1")
@@ -294,22 +294,22 @@ def generate_c4_chain_report_html(
     r4 = _get_row(c4, run_id)
     if not r4:
         raise ValueError(f"No se encontró {run_id} en C4")
-    c3_id = canon(_safe_str(r4.get("c3_human_id", "")))
+    c3_id = canon(_safe_str(r4.get("c3_id", "")))
     r3 = _get_row(c3, c3_id) if c3_id else None
     if not r3:
         raise ValueError(f"Cadena rota: C3 '{c3_id}' no encontrado")
-    c2_id = canon(_safe_str(r3.get("c2_human_id", "")))
+    c2_id = canon(_safe_str(r3.get("c2_id", "")))
     r2 = _get_row(c2, c2_id) if c2_id else None
     if not r2:
         raise ValueError(f"Cadena rota: C2 '{c2_id}' no encontrado")
-    c1_id = canon(_safe_str(r2.get("c1_human_id", "")))
+    c1_id = canon(_safe_str(r2.get("c1_id", "")))
     r1 = _get_row(c1, c1_id) if c1_id else None
     if not r1:
         raise ValueError(f"Cadena rota: C1 '{c1_id}' no encontrado")
 
     # Lists (context)
-    components = _list_children_min(c3, "c2_human_id", c2_id)
-    runtimes = _list_children_min(c4, "c3_human_id", c3_id)
+    components = _list_children_min(c3, "c2_id", c2_id)
+    runtimes = _list_children_min(c4, "c3_id", c3_id)
 
     # Diagram (same as UI)
     mermaid_code, diagram_meta = build_record_diagram(rp, run_id, max_nodes=max_nodes)

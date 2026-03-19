@@ -25,7 +25,7 @@ class Issue:
     issue_id: str
     severity: str          # error/warning/info
     level: str             # C1/C2/C3/C4
-    human_id: str
+    id: str
     parent_ref: str
     issue_type: str        # orphan/missing_required/invalid_lookup
     message: str
@@ -167,10 +167,10 @@ def _validate_lookup_tokens(
       - if the cell contains separators (, ; |) we treat it as multi
       - otherwise it's a single token
     """
-    if df is None or df.empty or field not in df.columns or "human_id" not in df.columns:
+    if df is None or df.empty or field not in df.columns or "id" not in df.columns:
         return
     for _, r in df.iterrows():
-        hid = str(r.get("human_id", "")).strip()
+        hid = str(r.get("id", "")).strip()
         raw = r.get(field, "")
         values = _split_multivalue(raw)
         # if it doesn't look like multi, _split_multivalue returns [token] for non-empty
@@ -181,7 +181,7 @@ def _validate_lookup_tokens(
                         issue_id=f"{level}-LOOKUP-{hid}-{field}-{v}",
                         severity="error",
                         level=level,
-                        human_id=hid,
+                        id=hid,
                         parent_ref="",
                         issue_type="invalid_lookup",
                         message=f"Valor inválido en {field}: '{v}' (lookup {field})",
@@ -240,7 +240,7 @@ def validate_config_lookup_fields_exist(
                         issue_id=f"{lvl}-LOOKUP-MISSINGFIELD-{name}",
                         severity="warning",
                         level=lvl,
-                        human_id="",
+                        id="",
                         parent_ref="",
                         issue_type="config_missing_field",
                         message=f"LOOKUPS define '{name}' para {lvl}, pero la columna no existe en la pestaña.",
@@ -286,7 +286,7 @@ def validate_config_rules_fields_exist(
                     issue_id=f"{lvl}-RULE-MISSINGFIELD-{rid}-{wf}",
                     severity="warning",
                     level=lvl,
-                    human_id="",
+                    id="",
                     parent_ref="",
                     issue_type="config_missing_field",
                     message=f"RULES ({rid}) referencia campo '{wf}' en {lvl}, pero la columna no existe.",
@@ -302,7 +302,7 @@ def validate_required(df: pd.DataFrame, level: str, required_cols: List[str], is
                 issue_id=f"{level}-MISSINGCOL-{col}",
                 severity="error",
                 level=level,
-                human_id="",
+                id="",
                 parent_ref="",
                 issue_type="missing_required",
                 message=f"Falta columna requerida '{col}' en {level}",
@@ -310,9 +310,9 @@ def validate_required(df: pd.DataFrame, level: str, required_cols: List[str], is
             ))
             continue
 
-    if "human_id" in df.columns:
+    if "id" in df.columns:
         for idx, r in df.iterrows():
-            hid = str(r.get("human_id", "")).strip()
+            hid = str(r.get("id", "")).strip()
             for col in required_cols:
                 if col in df.columns:
                     v = str(r.get(col, "")).strip()
@@ -321,7 +321,7 @@ def validate_required(df: pd.DataFrame, level: str, required_cols: List[str], is
                             issue_id=f"{level}-REQ-{hid or 'ROW'+str(idx)}-{col}",
                             severity="error",
                             level=level,
-                            human_id=hid,
+                            id=hid,
                             parent_ref="",
                             issue_type="missing_required",
                             message=f"Campo requerido vacío: {col}",
@@ -329,37 +329,37 @@ def validate_required(df: pd.DataFrame, level: str, required_cols: List[str], is
                         ))
 
 
-def validate_unique_human_id(df: pd.DataFrame, level: str, issues: List[Issue]):
-    if "human_id" not in df.columns:
+def validate_unique_id(df: pd.DataFrame, level: str, issues: List[Issue]):
+    if "id" not in df.columns:
         return
-    s = df["human_id"].astype(str).str.strip()
+    s = df["id"].astype(str).str.strip()
     dupes = s[s.duplicated(keep=False) & (s != "")]
     for hid in sorted(set(dupes.tolist())):
         issues.append(Issue(
             issue_id=f"{level}-DUP-{hid}",
             severity="error",
             level=level,
-            human_id=hid,
+            id=hid,
             parent_ref="",
             issue_type="missing_required",
-            message="human_id duplicado dentro del nivel",
-            suggested_fix="Hacer human_id único en esa pestaña"
+            message="id duplicado dentro del nivel",
+            suggested_fix="Hacer id único en esa pestaña"
         ))
 
 
 def validate_lookup_single(df: pd.DataFrame, level: str, field: str, lookup_name: str, lookups: Dict[str, set], issues: List[Issue]):
-    if field not in df.columns or lookup_name not in lookups or "human_id" not in df.columns:
+    if field not in df.columns or lookup_name not in lookups or "id" not in df.columns:
         return
     allowed = lookups[lookup_name]
     for _, r in df.iterrows():
-        hid = str(r.get("human_id", "")).strip()
+        hid = str(r.get("id", "")).strip()
         v = str(r.get(field, "")).strip()
         if v and v not in allowed:
             issues.append(Issue(
                 issue_id=f"{level}-LOOKUP-{hid}-{field}",
                 severity="error",
                 level=level,
-                human_id=hid,
+                id=hid,
                 parent_ref="",
                 issue_type="invalid_lookup",
                 message=f"Valor inválido en {field}: '{v}' (lookup {lookup_name})",
@@ -368,11 +368,11 @@ def validate_lookup_single(df: pd.DataFrame, level: str, field: str, lookup_name
 
 
 def validate_lookup_multi(df: pd.DataFrame, level: str, field: str, lookup_name: str, lookups: Dict[str, set], issues: List[Issue]):
-    if field not in df.columns or lookup_name not in lookups or "human_id" not in df.columns:
+    if field not in df.columns or lookup_name not in lookups or "id" not in df.columns:
         return
     allowed = lookups[lookup_name]
     for _, r in df.iterrows():
-        hid = str(r.get("human_id", "")).strip()
+        hid = str(r.get("id", "")).strip()
         values = _split_multivalue(r.get(field, ""))
         for v in values:
             if v not in allowed:
@@ -380,7 +380,7 @@ def validate_lookup_multi(df: pd.DataFrame, level: str, field: str, lookup_name:
                     issue_id=f"{level}-LOOKUP-{hid}-{field}-{v}",
                     severity="error",
                     level=level,
-                    human_id=hid,
+                    id=hid,
                     parent_ref="",
                     issue_type="invalid_lookup",
                     message=f"Valor inválido en {field}: '{v}' (lookup {lookup_name})",
@@ -392,59 +392,59 @@ def validate_relations(
     c1: pd.DataFrame, c2: pd.DataFrame, c3: pd.DataFrame, c4: pd.DataFrame,
     issues: List[Issue]
 ):
-    c1_ids = set(c1.get("human_id", pd.Series([], dtype=str)).astype(str).str.strip())
-    c2_ids = set(c2.get("human_id", pd.Series([], dtype=str)).astype(str).str.strip())
-    c3_ids = set(c3.get("human_id", pd.Series([], dtype=str)).astype(str).str.strip())
+    c1_ids = set(c1.get("id", pd.Series([], dtype=str)).astype(str).str.strip())
+    c2_ids = set(c2.get("id", pd.Series([], dtype=str)).astype(str).str.strip())
+    c3_ids = set(c3.get("id", pd.Series([], dtype=str)).astype(str).str.strip())
 
     # C2 -> C1
-    if "c1_human_id" in c2.columns and "human_id" in c2.columns:
+    if "c1_id" in c2.columns and "id" in c2.columns:
         for _, r in c2.iterrows():
-            hid = str(r.get("human_id", "")).strip()
-            parent = str(r.get("c1_human_id", "")).strip()
+            hid = str(r.get("id", "")).strip()
+            parent = str(r.get("c1_id", "")).strip()
             if not parent or parent not in c1_ids:
                 issues.append(Issue(
                     issue_id=f"C2-ORPHAN-{hid}",
                     severity="error",
                     level="C2",
-                    human_id=hid,
+                    id=hid,
                     parent_ref=parent,
                     issue_type="orphan",
                     message="Registro sin padre asociado o padre inexistente",
-                    suggested_fix="Rellenar c1_human_id con un PRJ existente"
+                    suggested_fix="Rellenar c1_id con un PRJ existente"
                 ))
 
     # C3 -> C2
-    if "c2_human_id" in c3.columns and "human_id" in c3.columns:
+    if "c2_id" in c3.columns and "id" in c3.columns:
         for _, r in c3.iterrows():
-            hid = str(r.get("human_id", "")).strip()
-            parent = str(r.get("c2_human_id", "")).strip()
+            hid = str(r.get("id", "")).strip()
+            parent = str(r.get("c2_id", "")).strip()
             if not parent or parent not in c2_ids:
                 issues.append(Issue(
                     issue_id=f"C3-ORPHAN-{hid}",
                     severity="error",
                     level="C3",
-                    human_id=hid,
+                    id=hid,
                     parent_ref=parent,
                     issue_type="orphan",
                     message="Registro sin padre asociado o padre inexistente",
-                    suggested_fix="Rellenar c2_human_id con un APP existente"
+                    suggested_fix="Rellenar c2_id con un APP existente"
                 ))
 
     # C4 -> C3
-    if "c3_human_id" in c4.columns and "human_id" in c4.columns:
+    if "c3_id" in c4.columns and "id" in c4.columns:
         for _, r in c4.iterrows():
-            hid = str(r.get("human_id", "")).strip()
-            parent = str(r.get("c3_human_id", "")).strip()
+            hid = str(r.get("id", "")).strip()
+            parent = str(r.get("c3_id", "")).strip()
             if not parent or parent not in c3_ids:
                 issues.append(Issue(
                     issue_id=f"C4-ORPHAN-{hid}",
                     severity="error",
                     level="C4",
-                    human_id=hid,
+                    id=hid,
                     parent_ref=parent,
                     issue_type="orphan",
                     message="Registro sin padre asociado o padre inexistente",
-                    suggested_fix="Rellenar c3_human_id con un CMP existente"
+                    suggested_fix="Rellenar c3_id con un CMP existente"
                 ))
 
 
@@ -478,7 +478,7 @@ def normalize_and_derive_vulnerabilities(
                 issue_id="CFG-VULN-MISSINGFIELD",
                 severity="warning",
                 level="ALL",
-                human_id="",
+                id="",
                 parent_ref="",
                 issue_type="config_missing_field",
                 message=f"El motor soporta 'vulnerabilities_detected', pero el campo no existe en ninguna pestaña. Se omite su cálculo.",
@@ -491,14 +491,14 @@ def normalize_and_derive_vulnerabilities(
 
     # normalize keys
     for df in (c1n, c2n, c3n, c4n):
-        if "human_id" in df.columns:
-            df["human_id"] = df["human_id"].astype(str).str.strip()
-    if "c1_human_id" in c2n.columns:
-        c2n["c1_human_id"] = c2n["c1_human_id"].astype(str).str.strip()
-    if "c2_human_id" in c3n.columns:
-        c3n["c2_human_id"] = c3n["c2_human_id"].astype(str).str.strip()
-    if "c3_human_id" in c4n.columns:
-        c4n["c3_human_id"] = c4n["c3_human_id"].astype(str).str.strip()
+        if "id" in df.columns:
+            df["id"] = df["id"].astype(str).str.strip()
+    if "c1_id" in c2n.columns:
+        c2n["c1_id"] = c2n["c1_id"].astype(str).str.strip()
+    if "c2_id" in c3n.columns:
+        c3n["c2_id"] = c3n["c2_id"].astype(str).str.strip()
+    if "c3_id" in c4n.columns:
+        c4n["c3_id"] = c4n["c3_id"].astype(str).str.strip()
 
     # C3/C4: normalize and flag invalids (only if column exists)
     for level, df in (("C3", c3n), ("C4", c4n)):
@@ -506,7 +506,7 @@ def normalize_and_derive_vulnerabilities(
             continue
         new_vals = []
         for _, r in df.iterrows():
-            hid = str(r.get("human_id", "")).strip()
+            hid = str(r.get("id", "")).strip()
             raw = r.get(VULN_FIELD, "")
             cv = _canon_vuln(raw)
             if cv == "__invalid__":
@@ -515,7 +515,7 @@ def normalize_and_derive_vulnerabilities(
                         issue_id=f"{level}-VULN-INVALID-{hid}",
                         severity="warning",
                         level=level,
-                        human_id=hid,
+                        id=hid,
                         parent_ref="",
                         issue_type="invalid_value",
                         message=f"Valor inválido en {VULN_FIELD}: '{str(raw).strip()}'",
@@ -528,17 +528,17 @@ def normalize_and_derive_vulnerabilities(
 
     # Build ancestry maps
     c3_to_c2 = {}
-    if "human_id" in c3n.columns and "c2_human_id" in c3n.columns:
-        c3_to_c2 = dict(zip(c3n["human_id"].astype(str), c3n["c2_human_id"].astype(str)))
+    if "id" in c3n.columns and "c2_id" in c3n.columns:
+        c3_to_c2 = dict(zip(c3n["id"].astype(str), c3n["c2_id"].astype(str)))
     c4_to_c3 = {}
-    if "human_id" in c4n.columns and "c3_human_id" in c4n.columns:
-        c4_to_c3 = dict(zip(c4n["human_id"].astype(str), c4n["c3_human_id"].astype(str)))
+    if "id" in c4n.columns and "c3_id" in c4n.columns:
+        c4_to_c3 = dict(zip(c4n["id"].astype(str), c4n["c3_id"].astype(str)))
 
     # Collect vuln values per C3 (from C4)
     vuln_by_c3: Dict[str, List[str]] = {}
-    if VULN_FIELD in c4n.columns and "human_id" in c4n.columns:
+    if VULN_FIELD in c4n.columns and "id" in c4n.columns:
         for _, r in c4n.iterrows():
-            cid = str(r.get("human_id", "")).strip()
+            cid = str(r.get("id", "")).strip()
             p = str(c4_to_c3.get(cid, "")).strip()
             if not p:
                 continue
@@ -546,9 +546,9 @@ def normalize_and_derive_vulnerabilities(
 
     # Collect vuln values per C2 (from C3)
     vuln_by_c2: Dict[str, List[str]] = {}
-    if VULN_FIELD in c3n.columns and "human_id" in c3n.columns:
+    if VULN_FIELD in c3n.columns and "id" in c3n.columns:
         for _, r in c3n.iterrows():
-            cid = str(r.get("human_id", "")).strip()
+            cid = str(r.get("id", "")).strip()
             p = str(c3_to_c2.get(cid, "")).strip()
             if not p:
                 continue
@@ -558,7 +558,7 @@ def normalize_and_derive_vulnerabilities(
     if VULN_FIELD in c3n.columns and vuln_by_c3:
         inferred = []
         for _, r in c3n.iterrows():
-            hid = str(r.get("human_id", "")).strip()
+            hid = str(r.get("id", "")).strip()
             cur = str(r.get(VULN_FIELD, "")).strip()
             inferred.append(cur or _derive_vuln_from_children(vuln_by_c3.get(hid, [])))
         c3n[VULN_FIELD] = inferred
@@ -567,21 +567,21 @@ def normalize_and_derive_vulnerabilities(
     if VULN_FIELD in c2n.columns:
         inherited = []
         for _, r in c2n.iterrows():
-            hid = str(r.get("human_id", "")).strip()
+            hid = str(r.get("id", "")).strip()
             inherited.append(_derive_vuln_from_children(vuln_by_c2.get(hid, [])))
         c2n[VULN_FIELD] = inherited
 
     # Inherit to C1 only if C1 has the column (requires C2 inheritance too)
-    if VULN_FIELD in c1n.columns and VULN_FIELD in c2n.columns and "c1_human_id" in c2n.columns:
+    if VULN_FIELD in c1n.columns and VULN_FIELD in c2n.columns and "c1_id" in c2n.columns:
         by_c1: Dict[str, List[str]] = {}
         for _, r in c2n.iterrows():
-            pid = str(r.get("c1_human_id", "")).strip()
+            pid = str(r.get("c1_id", "")).strip()
             if not pid:
                 continue
             by_c1.setdefault(pid, []).append(str(r.get(VULN_FIELD, "")).strip())
         inherited_c1 = []
         for _, r in c1n.iterrows():
-            hid = str(r.get("human_id", "")).strip()
+            hid = str(r.get("id", "")).strip()
             inherited_c1.append(_derive_vuln_from_children(by_c1.get(hid, [])))
         c1n[VULN_FIELD] = inherited_c1
 
@@ -590,37 +590,37 @@ def normalize_and_derive_vulnerabilities(
 
 def _build_relation_helpers(c1: pd.DataFrame, c2: pd.DataFrame, c3: pd.DataFrame, c4: pd.DataFrame) -> Dict[str, Any]:
     """Precompute relation data used by RULES."""
-    c1_ids = set(c1.get("human_id", pd.Series([], dtype=str)).astype(str).str.strip())
-    c2_ids = set(c2.get("human_id", pd.Series([], dtype=str)).astype(str).str.strip())
-    c3_ids = set(c3.get("human_id", pd.Series([], dtype=str)).astype(str).str.strip())
+    c1_ids = set(c1.get("id", pd.Series([], dtype=str)).astype(str).str.strip())
+    c2_ids = set(c2.get("id", pd.Series([], dtype=str)).astype(str).str.strip())
+    c3_ids = set(c3.get("id", pd.Series([], dtype=str)).astype(str).str.strip())
 
     c2_parent = {}
-    if "human_id" in c2.columns and "c1_human_id" in c2.columns:
-        c2_parent = dict(zip(c2["human_id"].astype(str).str.strip(), c2["c1_human_id"].astype(str).str.strip()))
+    if "id" in c2.columns and "c1_id" in c2.columns:
+        c2_parent = dict(zip(c2["id"].astype(str).str.strip(), c2["c1_id"].astype(str).str.strip()))
     c3_parent = {}
-    if "human_id" in c3.columns and "c2_human_id" in c3.columns:
-        c3_parent = dict(zip(c3["human_id"].astype(str).str.strip(), c3["c2_human_id"].astype(str).str.strip()))
+    if "id" in c3.columns and "c2_id" in c3.columns:
+        c3_parent = dict(zip(c3["id"].astype(str).str.strip(), c3["c2_id"].astype(str).str.strip()))
     c4_parent = {}
-    if "human_id" in c4.columns and "c3_human_id" in c4.columns:
-        c4_parent = dict(zip(c4["human_id"].astype(str).str.strip(), c4["c3_human_id"].astype(str).str.strip()))
+    if "id" in c4.columns and "c3_id" in c4.columns:
+        c4_parent = dict(zip(c4["id"].astype(str).str.strip(), c4["c3_id"].astype(str).str.strip()))
 
     # descendant counts
     counts_c2_by_c1 = {}
-    if "c1_human_id" in c2.columns:
-        counts_c2_by_c1 = c2.groupby(c2["c1_human_id"].astype(str).str.strip()).size().to_dict()
+    if "c1_id" in c2.columns:
+        counts_c2_by_c1 = c2.groupby(c2["c1_id"].astype(str).str.strip()).size().to_dict()
     counts_c3_by_c2 = {}
-    if "c2_human_id" in c3.columns:
-        counts_c3_by_c2 = c3.groupby(c3["c2_human_id"].astype(str).str.strip()).size().to_dict()
+    if "c2_id" in c3.columns:
+        counts_c3_by_c2 = c3.groupby(c3["c2_id"].astype(str).str.strip()).size().to_dict()
     counts_c4_by_c3 = {}
-    if "c3_human_id" in c4.columns:
-        counts_c4_by_c3 = c4.groupby(c4["c3_human_id"].astype(str).str.strip()).size().to_dict()
+    if "c3_id" in c4.columns:
+        counts_c4_by_c3 = c4.groupby(c4["c3_id"].astype(str).str.strip()).size().to_dict()
 
     # runtimes by C2 and C1
     runtimes_by_c2: Dict[str, int] = {}
     runtimes_by_c1: Dict[str, int] = {}
-    if not c4.empty and "c3_human_id" in c4.columns and c3_parent and c2_parent:
+    if not c4.empty and "c3_id" in c4.columns and c3_parent and c2_parent:
         for _, r in c4.iterrows():
-            c3_id = str(r.get("c3_human_id", "")).strip()
+            c3_id = str(r.get("c3_id", "")).strip()
             c2_id = str(c3_parent.get(c3_id, "")).strip()
             c1_id = str(c2_parent.get(c2_id, "")).strip()
             if c2_id:
@@ -671,13 +671,13 @@ def evaluate_rules(
         if level not in views_by_level:
             continue
         df = views_by_level[level]
-        if df is None or df.empty or "human_id" not in df.columns:
+        if df is None or df.empty or "id" not in df.columns:
             continue
 
         groups = dict(tuple(rrule.groupby("group_id")))
         # evaluate per record
         for _, rec in df.iterrows():
-            hid = str(rec.get("human_id", "")).strip()
+            hid = str(rec.get("id", "")).strip()
             if not hid:
                 continue
             triggered = False
@@ -756,7 +756,7 @@ def evaluate_rules(
                         issue_id=f"RULE-{rule_id}-{hid}",
                         severity=sev,
                         level=level,
-                        human_id=hid,
+                        id=hid,
                         parent_ref="",
                         issue_type="rule",
                         message=msg,
@@ -771,7 +771,7 @@ def generate_view_full(c1: pd.DataFrame, c2: pd.DataFrame, c3: pd.DataFrame, c4:
       - Incluye TODAS las columnas de C1..C4 de forma dinámica
       - Prefija por nivel: c1__ / c2__ / c3__ / c4__
       - Solo excluye los 3 campos redundantes de jerarquía:
-        c2__c1_human_id, c3__c2_human_id, c4__c3_human_id
+        c2__c1_id, c3__c2_id, c4__c3_id
       - Mantiene cualquier columna existente (incl. placeholders de riesgo)
     """
 
@@ -779,15 +779,15 @@ def generate_view_full(c1: pd.DataFrame, c2: pd.DataFrame, c3: pd.DataFrame, c4:
 
     # Normaliza claves (strip)
     for df in (c1n, c2n, c3n, c4n):
-        if "human_id" in df.columns:
-            df["human_id"] = df["human_id"].astype(str).str.strip()
+        if "id" in df.columns:
+            df["id"] = df["id"].astype(str).str.strip()
 
-    if "c1_human_id" in c2n.columns:
-        c2n["c1_human_id"] = c2n["c1_human_id"].astype(str).str.strip()
-    if "c2_human_id" in c3n.columns:
-        c3n["c2_human_id"] = c3n["c2_human_id"].astype(str).str.strip()
-    if "c3_human_id" in c4n.columns:
-        c4n["c3_human_id"] = c4n["c3_human_id"].astype(str).str.strip()
+    if "c1_id" in c2n.columns:
+        c2n["c1_id"] = c2n["c1_id"].astype(str).str.strip()
+    if "c2_id" in c3n.columns:
+        c3n["c2_id"] = c3n["c2_id"].astype(str).str.strip()
+    if "c3_id" in c4n.columns:
+        c4n["c3_id"] = c4n["c3_id"].astype(str).str.strip()
 
     # Prefijos dinámicos
     c1p = c1n.add_prefix("c1__")
@@ -798,30 +798,30 @@ def generate_view_full(c1: pd.DataFrame, c2: pd.DataFrame, c3: pd.DataFrame, c4:
     # Merge chain desde runtime hacia arriba (solo cadenas completas)
     j = c4p.merge(
         c3p,
-        left_on="c4__c3_human_id",
-        right_on="c3__human_id",
+        left_on="c4__c3_id",
+        right_on="c3__id",
         how="inner",
     )
     j = j.merge(
         c2p,
-        left_on="c3__c2_human_id",
-        right_on="c2__human_id",
+        left_on="c3__c2_id",
+        right_on="c2__id",
         how="inner",
     )
     j = j.merge(
         c1p,
-        left_on="c2__c1_human_id",
-        right_on="c1__human_id",
+        left_on="c2__c1_id",
+        right_on="c1__id",
         how="inner",
     )
 
     # Compact: elimina solo los 3 campos redundantes de jerarquía
-    drop_cols = [c for c in ["c2__c1_human_id", "c3__c2_human_id", "c4__c3_human_id"] if c in j.columns]
+    drop_cols = [c for c in ["c2__c1_id", "c3__c2_id", "c4__c3_id"] if c in j.columns]
     if drop_cols:
         j = j.drop(columns=drop_cols)
 
     # Orden estable
-    sort_cols = [c for c in ["c1__human_id", "c2__human_id", "c3__human_id", "c4__human_id"] if c in j.columns]
+    sort_cols = [c for c in ["c1__id", "c2__id", "c3__id", "c4__id"] if c in j.columns]
     if sort_cols:
         j = j.sort_values(sort_cols, kind="mergesort")
 
@@ -840,16 +840,16 @@ def compute(path: str) -> Tuple[pd.DataFrame, pd.DataFrame, Dict[str, pd.DataFra
     issues: List[Issue] = []
 
     # Required columns (MVP minimums; puedes ajustar)
-    validate_required(c1, "C1", ["human_id", "status", "name"], issues)
-    validate_required(c2, "C2", ["c1_human_id", "human_id", "status", "name"], issues)
-    validate_required(c3, "C3", ["c2_human_id", "human_id", "status", "name"], issues)
-    validate_required(c4, "C4", ["c3_human_id", "human_id", "status", "name"], issues)
+    validate_required(c1, "C1", ["id", "status", "name"], issues)
+    validate_required(c2, "C2", ["c1_id", "id", "status", "name"], issues)
+    validate_required(c3, "C3", ["c2_id", "id", "status", "name"], issues)
+    validate_required(c4, "C4", ["c3_id", "id", "status", "name"], issues)
 
     # Unique IDs
-    validate_unique_human_id(c1, "C1", issues)
-    validate_unique_human_id(c2, "C2", issues)
-    validate_unique_human_id(c3, "C3", issues)
-    validate_unique_human_id(c4, "C4", issues)
+    validate_unique_id(c1, "C1", issues)
+    validate_unique_id(c2, "C2", issues)
+    validate_unique_id(c3, "C3", issues)
+    validate_unique_id(c4, "C4", issues)
 
     # NOTE: relations (orphans, missing descendants, etc.) are evaluated via RULES.
 

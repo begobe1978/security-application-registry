@@ -9,5 +9,5 @@ if "%SECRET_KEY%"=="" (
   set "SECRET_KEY=dev-secret-change-me"
 )
 
-uvicorn sar.app:app --reload
+uvicorn sar.app:app --reload --app-dir src
 endlocal

@@ -146,10 +146,121 @@
     .schema-dirty{ background:rgba(217,119,6,.22); }
     .schema-missing{ background:rgba(220,38,38,.22); }
 
+	.topbar-center{
+	  min-width:0;
+	  display:flex;
+	  flex-direction:column;
+	  gap:8px;
+	  align-items:flex-start;
+	}
+
+	.schema-alert{
+	  display:inline-flex;
+	  align-items:center;
+	  gap:8px;
+	  max-width:100%;
+	  padding:8px 12px;
+	  border-radius:999px;
+	  font-size:12px;
+	  font-weight:800;
+	  line-height:1.2;
+	  border:1px solid rgba(255,255,255,.20);
+	  box-shadow:0 6px 14px rgba(0,0,0,.16);
+	}
+
+	.schema-alert-icon{
+	  flex:0 0 auto;
+	  font-size:13px;
+	}
+
+	.schema-alert-text{
+	  color:#F9FAFB;
+	  white-space:nowrap;
+	}
+
+	.schema-alert-warning{
+	  background:rgba(255,255,255,.18);
+	  border-color:rgba(251,191,36,.30);
+	}
+
+	.schema-alert-danger{
+	  background:rgba(255,255,255,.18);
+	  border-color:rgba(248,113,113,.30);
+	}
+
     .nav{
       display:flex;
       gap:8px;
       flex-wrap:wrap;
+    }
+
+    /* =========================
+       SUBNAV
+       ========================= */
+
+    .subnav{
+      background:var(--subnav-bg);
+      border-top:1px solid rgba(255,255,255,.06);
+    }
+
+    .subnav-inner{
+      max-width:1180px;
+      margin:0 auto;
+      padding:10px 20px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      flex-wrap:wrap;
+    }
+
+    .subnav-group{
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+      align-items:center;
+    }
+
+    .subnav-link{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding:8px 12px;
+      border-radius:999px;
+      font-size:12px;
+      font-weight:800;
+      color:#D1D5DB;
+      background:rgba(255,255,255,.04);
+      border:1px solid rgba(255,255,255,.08);
+      transition:background .15s ease,border-color .15s ease,color .15s ease,transform .02s ease;
+      white-space:nowrap;
+    }
+
+    .subnav-link:hover{
+      background:rgba(255,255,255,.08);
+      color:#ffffff;
+    }
+
+    .subnav-link:active{
+      transform:translateY(1px);
+    }
+
+    .subnav-link.active{
+      background:var(--accent);
+      border-color:var(--accent);
+      color:#ffffff;
+    }
+
+    .subnav-link.special{
+      background:rgba(11,95,255,.16);
+      border-color:rgba(11,95,255,.35);
+      color:#BFDBFE;
+    }
+
+    .subnav-link.issues{
+      background:rgba(217,119,6,.16);
+      border-color:rgba(217,119,6,.35);
+      color:#FCD34D;
     }
 
     /* =========================
@@ -474,43 +585,62 @@ th, td{
 </head>
 
 <body>
-  <div class="topbar">
+    <div class="topbar">
     <div class="topbar-inner">
       <div class="brand">
         <img class="brand-logo" src="{{ request.url_for('static', path='img/brand/logo-deportes.svg') }}" alt="SAR"/>
         <div>
-          <small>Security Application Registry</small>
+          <small>Security Application Registry...</small>
         </div>
       </div>
 
-      <div class="path" title="{{ path if path else '' }}">
-        {{ path if path else "Sin registry cargado" }}
-      </div>
+      <div class="topbar-center">
+        <div class="path" title="{{ path if path else '' }}">
+          {{ path if path else "Sin registry cargado" }}
+        </div>
 
-      {% if schema and schema.status != 'ok' and schema.status != 'template_only' and schema.status != 'no_template' %}
-        <a class="schema-badge schema-dirty" href="/" title="Plantilla/registry no coinciden">
-          Plantilla ≠ registry · revisar en Home
-        </a>
-      {% elif schema and schema.status == 'no_template' %}
-        <a class="schema-badge schema-missing" href="/" title="No hay plantilla base">
-          Falta plantilla base
-        </a>
-      {% endif %}
+        {% if schema and schema.status != 'ok' and schema.status != 'template_only' and schema.status != 'no_template' %}
+          <a class="schema-alert schema-alert-warning" href="/" title="Plantilla y registry no coinciden">
+            <span class="schema-alert-icon">⚠</span>
+            <span class="schema-alert-text">Plantilla y registry no coinciden · revisar en Home</span>
+          </a>
+        {% elif schema and schema.status == 'no_template' %}
+          <a class="schema-alert schema-alert-danger" href="/" title="No hay plantilla base">
+            <span class="schema-alert-icon">⛔</span>
+            <span class="schema-alert-text">Falta plantilla base</span>
+          </a>
+        {% endif %}
+      </div>
 
       <div class="nav">
         <a class="btn btn-secondary" href="/">Home</a>
-        <a class="btn btn-secondary" href="/view-full">Full View</a>
-        <a class="btn btn-secondary" href="/issues">Issues</a>
 
         {% if current_user %}
+          <form method="post" action="/logout" style="display:inline;">
+		    <input type="hidden" name="{{ csrf_field_name }}" value="{{ csrf_token }}">
+            <button class="btn btn-ghost" type="submit">Salir</button>
+          </form>
+
           <span class="schema-badge schema-ok" title="Usuario autenticado">
             {{ current_user.username }} · {{ current_user.role }}
           </span>
-
-          <form method="post" action="/logout" style="display:inline;">
-            <button class="btn btn-ghost" type="submit">Logout</button>
-          </form>
         {% endif %}
+      </div>
+    </div>
+
+    <div class="subnav">
+      <div class="subnav-inner">
+        <div class="subnav-group">
+          <a class="subnav-link" href="/level/C1">Ver {{ level_labels.get("C1","C1") }}</a>
+          <a class="subnav-link" href="/level/C2">Ver {{ level_labels.get("C2","C2") }}</a>
+          <a class="subnav-link" href="/level/C3">Ver {{ level_labels.get("C3","C3") }}</a>
+          <a class="subnav-link" href="/level/C4">Ver {{ level_labels.get("C4","C4") }}</a>
+        </div>
+
+        <div class="subnav-group">
+          <a class="btn btn-secondary" href="/view-full">Vista completa</a>
+          <a class="btn btn-secondary" href="/issues">Issues</a>
+        </div>
       </div>
     </div>
   </div>
@@ -519,7 +649,7 @@ th, td{
     {% block content %}{% endblock %}
   </div>
 
-  <!-- Mermaid (used in /record/{human_id} diagrams). Safe to load globally. -->
+  <!-- Mermaid (used in /record/{id} diagrams). Safe to load globally. -->
   <script type="module">
     import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
     mermaid.initialize({ startOnLoad: true, securityLevel: "loose" });
@@ -553,8 +683,8 @@ th, td{
         const showItems = (items) => {
           if (!items || items.length === 0){ hide(); return; }
           results.innerHTML = items.map(it => {
-            const label = String(it.label || it.human_id || '');
-            const hid = String(it.human_id || '');
+            const label = String(it.label || it.id || '');
+            const hid = String(it.id || '');
             return `<button type="button" class="ac-opt" data-hid="${hid.replace(/"/g,'&quot;')}">${label.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</button>`;
           }).join('');
           results.style.display = 'block';

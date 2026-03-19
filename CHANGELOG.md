@@ -2,7 +2,7 @@
 ### Added
 - Record detail relationship diagram (Mermaid) with clickable nodes, contextual C1→C4 tree, highlighting and scroll container.
 - Dynamic dropdowns from LOOKUPS (single and multi-value) with consistent UI + engine validation.
-- Dynamic dropdowns from parent fields (c#_human_id) based on available parent values.
+- Dynamic dropdowns from parent fields (c#_id) based on available parent values.
 
 ### Changed
 - Project restructured to standard `src/` layout; package is installable (e.g. `pip install -e .`) and imports no longer depend on CWD.
@@ -34,7 +34,7 @@
   - Consistent validation between UI and rules engine
 
 - Dynamic dropdowns driven by parent values
-  - `c#_human_id` (parent-related) fields render using available parent values
+  - `c#_id` (parent-related) fields render using available parent values
   - Consistent validation between UI and available values
 
 - Schema template management and schema version control
@@ -56,9 +56,9 @@
 
 - C4 (RUN) report export in DOCX and HTML
   - New endpoints:
-    - `GET /report/c4/{human_id}.docx` (docxtpl)
-    - `GET /report/c4/{human_id}.html`
-    - `GET /report/c4/{human_id}.html?raw=1` (copy/paste friendly)
+    - `GET /report/c4/{id}.docx` (docxtpl)
+    - `GET /report/c4/{id}.html`
+    - `GET /report/c4/{id}.html?raw=1` (copy/paste friendly)
   - Reuses existing diagram generation for consistency
   - Mermaid diagram rendering to PNG via mermaid-cli when available
   - Graceful fallback when PNG rendering is unavailable (HTML remains usable)
@@ -107,7 +107,7 @@
     - LOOKUPS referencing missing fields raise an ISSUE
     - RULES referencing missing fields raise an ISSUE
   - Core validations remain prioritized and always enforced:
-    - Required structural fields (human_id, status, name, parent refs)
+    - Required structural fields (id, status, name, parent refs)
     - Hierarchical integrity
     - Derived logic (e.g., vulnerabilities_detected)
 

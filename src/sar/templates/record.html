@@ -9,12 +9,13 @@
 <div class="card">
   <div style="display:flex; justify-content:space-between; gap:14px; flex-wrap:wrap;">
     <div>
-      <h2 class="title">Ficha {{ level_labels.get(level, level) }} — <span style="font-family:var(--mono)">{{ human_id }}</span></h2>
+      <h2 class="title">Ficha {{ level_labels.get(level, level) }} — <span style="font-family:var(--mono)">{{ id }}</span></h2>
       <p class="subtitle">Origen: <b>{{ sheet }}</b> · Excel: <span style="font-family:var(--mono)">{{ path }}</span></p>
     </div>
 
     <div style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;">
-      <form method="post" action="/deprecate/{{ human_id }}">
+      <form method="post" action="/deprecate/{{ id }}">
+        <input type="hidden" name="{{ csrf_field_name }}" value="{{ csrf_token }}">
         <button class="btn btn-danger" type="submit">Deprecar</button>
       </form>
 
@@ -24,23 +25,23 @@
         <a class="btn btn-ghost" href="/level/{{ level }}?parent={{ parent_ref }}">Ver hermanos</a>
       {% endif %}
       {% if level == "C1" %}
-        <a class="btn btn-ghost" href="/level/C2?parent={{ human_id }}">Ver {{ level_labels.get("C2","C2") }} de {{ level_labels.get("C1","C1") }}</a>
+        <a class="btn btn-ghost" href="/level/C2?parent={{ id }}">Ver {{ level_labels.get("C2","C2") }} de {{ level_labels.get("C1","C1") }}</a>
       {% elif level == "C2" %}
-        <a class="btn btn-ghost" href="/level/C3?parent={{ human_id }}">Ver {{ level_labels.get("C3","C3") }} de {{ level_labels.get("C2","C2") }}</a>
+        <a class="btn btn-ghost" href="/level/C3?parent={{ id }}">Ver {{ level_labels.get("C3","C3") }} de {{ level_labels.get("C2","C2") }}</a>
       {% elif level == "C3" %}
-        <a class="btn btn-ghost" href="/level/C4?parent={{ human_id }}">Ver {{ level_labels.get("C4","C4") }} de {{ level_labels.get("C3","C3") }}</a>
+        <a class="btn btn-ghost" href="/level/C4?parent={{ id }}">Ver {{ level_labels.get("C4","C4") }} de {{ level_labels.get("C3","C3") }}</a>
       {% endif %}
 
       {% if level == "C4" %}
-        <a class="btn btn-primary" href="/report/c4/{{ human_id }}.docx">Informe Word</a>
-        <a class="btn btn-secondary" href="/report/c4/{{ human_id }}.html">Informe HTML</a>
+        <a class="btn btn-primary" href="/report/c4/{{ id }}.docx">Informe Word</a>
+        <a class="btn btn-secondary" href="/report/c4/{{ id }}.html">Informe HTML</a>
       {% endif %}
       {% if level == "C1" %}
-        <a class="btn btn-primary" href="/create/C2?parent={{ human_id }}">Alta {{ level_labels.get("C2","C2") }}</a>
+        <a class="btn btn-primary" href="/create/C2?parent={{ id }}">Alta {{ level_labels.get("C2","C2") }}</a>
       {% elif level == "C2" %}
-        <a class="btn btn-primary" href="/create/C3?parent={{ human_id }}">Alta {{ level_labels.get("C3","C3") }}</a>
+        <a class="btn btn-primary" href="/create/C3?parent={{ id }}">Alta {{ level_labels.get("C3","C3") }}</a>
       {% elif level == "C3" %}
-        <a class="btn btn-primary" href="/create/C4?parent={{ human_id }}">Alta {{ level_labels.get("C4","C4") }}</a>
+        <a class="btn btn-primary" href="/create/C4?parent={{ id }}">Alta {{ level_labels.get("C4","C4") }}</a>
       {% endif %}
 
 
@@ -76,8 +77,8 @@
     {% else %}
       <div style="margin-top:8px; display:flex; flex-direction:column; gap:8px;">
         {% for c in children %}
-          <a class="btn btn-ghost" href="/record/{{ c.human_id }}" style="justify-content:space-between;">
-            <span style="font-family:var(--mono)">{{ c.human_id }}</span>
+          <a class="btn btn-ghost" href="/record/{{ c.id }}" style="justify-content:space-between;">
+            <span style="font-family:var(--mono)">{{ c.id }}</span>
             <span class="muted">{{ c.level }}</span>
           </a>
         {% endfor %}
@@ -132,7 +133,7 @@
                 <span class="badge">{{ i["issue_type"] }}</span>
               </div>
               <div class="muted" style="font-family:var(--mono); font-size:12px;">
-                {{ i["human_id"] }}{% if i["parent_ref"] %} ← {{ i["parent_ref"] }}{% endif %}
+                {{ i["id"] }}{% if i["parent_ref"] %} ← {{ i["parent_ref"] }}{% endif %}
               </div>
             </div>
             <div style="margin-top:8px;">{{ i["message"] }}</div>
@@ -194,10 +195,11 @@
   </div>
   <br>
 
-  <form method="post" action="/record/{{ human_id }}/edit">
+  <form method="post" action="/record/{{ id }}/edit">
+    <input type="hidden" name="{{ csrf_field_name }}" value="{{ csrf_token }}">
     <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:10px;">
       <span class="muted" style="font-size:12px;">
-        (Solo se actualizan columnas existentes. El <span style="font-family:var(--mono)">human_id</span> no es editable.)
+        (Solo se actualizan columnas existentes. El <span style="font-family:var(--mono)">id</span> no es editable.)
       </span>
       <button class="btn btn-primary" type="submit" style="margin-left:auto;">Guardar cambios</button>
     </div>
@@ -274,7 +276,8 @@
     </div>
   </div>
 
-  <form method="post" action="/record/{{ human_id }}/add-field/preview" style="margin-top:12px;">
+  <form method="post" action="/record/{{ id }}/add-field/preview" style="margin-top:12px;">
+    <input type="hidden" name="{{ csrf_field_name }}" value="{{ csrf_token }}">
     <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
       <div style="min-width:220px; flex:1;">
         <label class="muted" style="font-size:12px;">Nombre del campo</label>

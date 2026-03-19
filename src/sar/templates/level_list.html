@@ -8,7 +8,7 @@
 
 <div class="card">
   <h2 class="title">Listado {{ level_labels.get(level, level) }}</h2>
-  <p class="subtitle">Vista por nivel (hoja del Excel). Incluye huérfanos y registros sin descendencia.</p>
+  <p class="subtitle">Vista por nivel (hoja del Excel). Incluye huérfanos y registros sin descendencia. En modo limitado se muestran siempre <code>id</code> y el campo padre del nivel (si existe); el resto sigue el orden del Excel.</p>
 
   <form method="get" action="/level/{{ level }}">
     <input type="hidden" name="view" value="{{ view }}">
@@ -90,8 +90,8 @@
       {% for r in rows %}
       <tr>
         {% for c in columns %}
-          {% if c == "human_id" %}
-            <td><a href="/record/{{ r.__human_id }}">{{ r[c] }}</a></td>
+          {% if c == "id" %}
+            <td><a href="/record/{{ r.__id }}">{{ r[c] }}</a></td>
           {% else %}
             <td>{{ r[c] }}</td>
           {% endif %}

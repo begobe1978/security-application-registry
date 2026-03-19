@@ -27,6 +27,7 @@
 
 <div class="card">
   <form method="post" action="/create/{{ level }}/preview">
+    <input type="hidden" name="{{ csrf_field_name }}" value="{{ csrf_token }}">
     <div class="grid grid-2">
       {% for col in columns %}
         <div class="{% if errors and errors.get(col) %}field-error{% endif %}">

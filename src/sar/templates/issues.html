@@ -70,7 +70,7 @@
         <tr>
           <th>severity</th>
           <th>level</th>
-          <th>human_id</th>
+          <th>id</th>
           <th>parent_ref</th>
           <th>issue_type</th>
           <th>message</th>
@@ -93,9 +93,9 @@
             <td><span class="badge">{{ level_labels.get(r["level"], r["level"]) }}</span></td>
 
             <td style="font-family:var(--mono)">
-              {% if r["human_id"] %}
-                <a href="/record/{{ r['human_id'] }}" style="color:var(--accent); font-weight:900;">
-                  {{ r["human_id"] }}
+              {% if r["id"] %}
+                <a href="/record/{{ r['id'] }}" style="color:var(--accent); font-weight:900;">
+                  {{ r["id"] }}
                 </a>
               {% else %}
                 —

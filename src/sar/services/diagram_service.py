@@ -42,8 +42,8 @@ from sar.services.record_service import detect_level_meta
 _SAFE_ID_RE = re.compile(r"[^a-zA-Z0-9_]")
 
 
-def _safe_node_id(level: str, human_id: str, suffix: str = "") -> str:
-    base = f"{level}_{canon(human_id)}"
+def _safe_node_id(level: str, id: str, suffix: str = "") -> str:
+    base = f"{level}_{canon(id)}"
     base = _SAFE_ID_RE.sub("_", base)
     if suffix:
         base = f"{base}_{_SAFE_ID_RE.sub('_', suffix)}"
@@ -57,8 +57,8 @@ def _short(text: str, max_len: int = 60) -> str:
     return t[: max_len - 1].rstrip() + "…"
 
 
-def _label(level: str, human_id: str, name: str, level_labels: Dict[str, str]) -> str:
-    hid = canon(human_id)
+def _label(level: str, id: str, name: str, level_labels: Dict[str, str]) -> str:
+    hid = canon(id)
     nm = _short(name)
     lvl = (level_labels or {}).get(level, level)
     if nm:
@@ -173,10 +173,10 @@ def _build_indexes(path: str) -> Dict[str, Dict]:
 
     def rows_from_df(df) -> Dict[str, Dict[str, str]]:
         out: Dict[str, Dict[str, str]] = {}
-        if df is None or df.empty or "human_id" not in df.columns:
+        if df is None or df.empty or "id" not in df.columns:
             return out
         for _, r in df.iterrows():
-            hid = canon(str(r.get("human_id", "")).strip())
+            hid = canon(str(r.get("id", "")).strip())
             if not hid:
                 continue
             out[hid] = {str(k): ("" if r.get(k) is None else str(r.get(k))) for k in df.columns}
@@ -194,19 +194,19 @@ def _build_indexes(path: str) -> Dict[str, Dict]:
 
     # Parents by convention
     for hid, r in rows["C2"].items():
-        pid = canon(r.get("c1_human_id", ""))
+        pid = canon(r.get("c1_id", ""))
         if pid:
             parent["C2"][hid] = pid
             children["C1"].setdefault(pid, []).append(hid)
 
     for hid, r in rows["C3"].items():
-        pid = canon(r.get("c2_human_id", ""))
+        pid = canon(r.get("c2_id", ""))
         if pid:
             parent["C3"][hid] = pid
             children["C2"].setdefault(pid, []).append(hid)
 
     for hid, r in rows["C4"].items():
-        pid = canon(r.get("c3_human_id", ""))
+        pid = canon(r.get("c3_id", ""))
         if pid:
             parent["C4"][hid] = pid
             children["C3"].setdefault(pid, []).append(hid)
@@ -219,9 +219,9 @@ def _build_indexes(path: str) -> Dict[str, Dict]:
     return {"rows": rows, "parent": parent, "children": children, "sheets": {"C1": s1, "C2": s2, "C3": s3, "C4": s4}}
 
 
-def _ancestor_chain(level: str, human_id: str, idx: Dict) -> Dict[str, str]:
+def _ancestor_chain(level: str, id: str, idx: Dict) -> Dict[str, str]:
     """Return dict with keys C1/C2/C3/C4 for available ancestors (canon ids)."""
-    hid = canon(human_id)
+    hid = canon(id)
     out: Dict[str, str] = {}
     if level == "C1":
         out["C1"] = hid
@@ -251,34 +251,34 @@ def _ancestor_chain(level: str, human_id: str, idx: Dict) -> Dict[str, str]:
     return out
 
 
-def _has_children(level: str, human_id: str, idx: Dict) -> bool:
+def _has_children(level: str, id: str, idx: Dict) -> bool:
     if level == "C2":
-        return bool(idx["children"]["C2"].get(canon(human_id), []))
+        return bool(idx["children"]["C2"].get(canon(id), []))
     if level == "C3":
-        return bool(idx["children"]["C3"].get(canon(human_id), []))
+        return bool(idx["children"]["C3"].get(canon(id), []))
     return False
 
 
-def build_record_diagram(path: str, human_id: str, max_nodes: int = 200) -> Tuple[str, Dict[str, object]]:
+def build_record_diagram(path: str, id: str, max_nodes: int = 200) -> Tuple[str, Dict[str, object]]:
     """Return (mermaid_code, meta) for a registry record."""
 
     meta_kv = read_meta_dict(path)
     level_labels = level_labels_from_meta(meta_kv) if meta_kv else dict(DEFAULT_LEVEL_LABELS)
-    meta = detect_level_meta(human_id)
+    meta = detect_level_meta(id)
     if not meta:
-        return "", {"error": "human_id no reconocido", "truncated": False, "node_count": 0, "max_nodes": max_nodes}
+        return "", {"error": "id no reconocido", "truncated": False, "node_count": 0, "max_nodes": max_nodes}
 
     level = meta["level"]
     idx = _build_indexes(path)
-    chain = _ancestor_chain(level, human_id, idx)
+    chain = _ancestor_chain(level, id, idx)
     c1_id = chain.get("C1", "")
     if not c1_id:
         # If the record exists but chain is broken, still show only the record node.
         b = _MermaidBuilder(max_nodes=max_nodes)
-        nid = _safe_node_id(level, human_id)
-        row = idx["rows"].get(level, {}).get(canon(human_id), {})
-        b.add_node(nid, _label(level, human_id, row.get("name", ""), level_labels), css_class="focus")
-        b.add_click(nid, f"/record/{canon(human_id)}")
+        nid = _safe_node_id(level, id)
+        row = idx["rows"].get(level, {}).get(canon(id), {})
+        b.add_node(nid, _label(level, id, row.get("name", ""), level_labels), css_class="focus")
+        b.add_click(nid, f"/record/{canon(id)}")
         return b.render(focus_node_id=nid), {"truncated": b.truncated, "node_count": len(b.nodes), "max_nodes": b.max_nodes}
 
     b = _MermaidBuilder(max_nodes=max_nodes)
@@ -306,7 +306,7 @@ def build_record_diagram(path: str, human_id: str, max_nodes: int = 200) -> Tupl
 
     # Focus node id
     focus_level = level
-    focus_id = canon(human_id)
+    focus_id = canon(id)
     focus_nid = _safe_node_id(focus_level, focus_id)
 
     # 1) Draw ancestor chain (C1 -> C2 -> C3 -> C4 as available)
