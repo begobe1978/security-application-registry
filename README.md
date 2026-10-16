@@ -1,125 +1,134 @@
-![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)
-
-
 # Security Application Registry (SAR)
 
-SAR (Security Application Registry) es un registro operativo de aplicaciones orientado a **Application Security** y **Secure Architecture**. Su objetivo es hacer el riesgo **visible, derivable y accionable** a partir de un modelo estructurado, con **Excel como “source of truth”** y un motor en Python para validar, calcular vistas y detectar inconsistencias.
+**Inventario operativo de aplicaciones orientado a Application Security y arquitectura segura.**
 
-> Autor / Maintainer: Bernardo Gómez Bey
+SAR conecta cuatro perspectivas de un mismo sistema —proyecto, aplicación, componente de código y contexto de ejecución— para facilitar la trazabilidad, la revisión de datos y la identificación de inconsistencias.
 
-## Contexto y alcance
+La idea es deliberadamente sencilla: **un libro Excel mantiene los datos; Python aporta estructura, validaciones, relaciones, vistas y una interfaz para trabajar con ellos.** No es necesario implantar una nueva plataforma de gestión para empezar.
 
-SAR no pretende sustituir herramientas de arquitectura empresarial, CMDBs ni plataformas de gobierno.
+> Proyecto personal y de código abierto. SAR propone una forma práctica de organizar información que normalmente está dispersa; no pretende sustituir por completo una CMDB ni una plataforma de gobierno o descubrimiento de activos.
 
-Proporciona una **visión operativa y específica** orientada a desarrollo y ciberseguridad, basada en cómo el software se desarrolla, se despliega y se ejecuta realmente. En lugar de modelar arquitecturas ideales o exhaustivas, SAR modela **proyectos, aplicaciones, componentes de código y sus contextos de ejecución concretos**, que es donde se materializan los cambios y el riesgo.
+## El problema que aborda
 
-El objetivo es reducir fricción entre desarrollo, seguridad y herramientas corporativas, capturando únicamente información que los equipos pueden mantener de forma realista, pero con suficiente estructura para servir como input fiable a plataformas más amplias.
+Conocer el nombre de una aplicación no equivale a conocer cómo está construida o dónde se ejecuta. Para analizar su exposición y asignar responsabilidades es útil relacionar su contexto organizativo con los repositorios, los componentes técnicos y los entornos de ejecución.
 
----
+SAR aporta **un modelo común para registrar esas relaciones, comprobar su consistencia y consultarlas**. No presupone que un inventario vaya a ser exhaustivo por utilizar una herramienta determinada: la cobertura y la vigencia de los datos dependen de cómo se alimenten y mantengan.
 
-## Modelo (C1–C4)
+## Modelo C1–C4
 
-SAR utiliza un modelo jerárquico de cuatro niveles para representar aplicaciones desde una perspectiva de **negocio, código y ejecución**, manteniendo cada responsabilidad claramente separada.
+| Nivel | Representa | Pregunta principal |
+|---|---|---|
+| **C1 — Proyecto** | Contexto organizativo y responsabilidad | ¿Bajo qué iniciativa o ámbito se gestiona? |
+| **C2 — Aplicación** | Unidad funcional | ¿Qué aplicación presta la funcionalidad? |
+| **C3 — Componente** | Unidad de código, por ejemplo API, frontend o proceso | ¿Qué software la implementa? |
+| **C4 — Runtime** | Contexto concreto de ejecución de un componente | ¿Dónde y en qué condiciones se ejecuta? |
 
-### C1 — Proyecto (unidad de negocio)
-Unidad de negocio y gobierno. Representa el nivel más alto de responsabilidad (sponsor/ownership) bajo el cual existen una o más aplicaciones.
+La relación estructural es `C1 → C2 → C3 → C4`. Una aplicación puede agrupar varios componentes, y un componente puede tener varios runtimes, por ejemplo en distintos entornos. Cada elemento mantiene una referencia a su nivel superior.
 
-Los proyectos **no contienen código** ni describen ejecución técnica.
+La estructura C1–C4 es fija; **los campos adicionales y las etiquetas visibles de los niveles pueden adaptarse** mediante el libro Excel.
 
-### C2 — Aplicación (unidad funcional)
-Unidad funcional de negocio. Vive bajo un proyecto (C1) y agrupa uno o varios componentes técnicos que la implementan.
+## Qué permite hacer
 
-La aplicación describe el **qué** (función), no el **cómo** (implementación) ni el **dónde** (ejecución).
+- **Mantener el inventario** mediante Excel y una interfaz web para consultar, crear y editar registros.
+- **Explorar las relaciones** entre proyectos, aplicaciones, componentes y runtimes, con vistas y diagramas contextuales.
+- **Detectar inconsistencias** estructurales y de datos: identificadores, referencias jerárquicas, campos obligatorios y valores no válidos.
+- **Definir validaciones desde el Excel**, usando las hojas `LOOKUPS` y `RULES` sin modificar el código para cada nuevo atributo.
+- **Calcular vistas derivadas** y consultar incidencias (*issues*) para orientar la revisión del inventario.
+- **Generar informes** de cadenas C1–C4 en HTML y DOCX; la imagen del diagrama en el DOCX depende de disponer de Mermaid CLI.
+- **Gestionar el esquema** de forma explícita mediante una plantilla base y operaciones de comparación, promoción y migración de columnas.
 
-### C3 — Componente (unidad de código)
-Unidad técnica de código dentro de una aplicación (por ejemplo: frontend, backend, API, worker).
+La autenticación admite usuarios locales y roles `viewer`, `editor` y `admin`.
 
-Es el nivel donde:
-- existe el código,
-- se define el repositorio,
-- viven decisiones técnicas y el SDLC.
+## Por qué Excel
 
-Un componente **no está ligado a un único entorno ni a un único runtime**.  
-El mismo C3 puede ejecutarse en múltiples contextos distintos.
+Excel es una **decisión de diseño**, no un almacenamiento temporal a la espera de una base de datos.
 
-### C4 — Runtime (contexto de ejecución)
-Contexto concreto donde se ejecuta un componente. No describe infraestructura física, pero sí atributos relevantes para seguridad (entorno, exposición, red/zona, riesgos).
+Permite inspeccionar, modificar, compartir de forma controlada y conservar el inventario con herramientas ampliamente disponibles. El motor Python se ocupa de las validaciones y relaciones que una hoja de cálculo por sí sola no garantiza.
 
-Cada C4 está asociado a **un único C3**, pero un C3 puede tener **múltiples C4**.
+Esta elección es especialmente adecuada para **uso local o controlado, con un proceso claro de mantenimiento de datos**. No implica que Excel ofrezca por sí solo transacciones, resolución de ediciones simultáneas o aislamiento entre usuarios concurrentes.
 
-### Invariantes del modelo
-- No existe C4 sin C3.
-- No existe C3 sin C2.
-- No existe C2 sin C1.
-- Debe existir al menos una cadena completa `C1 → C2 → C3 → C4`.
+Tampoco se equipara el descubrimiento automático de recursos con la comprensión de una aplicación: detectar un servidor o un repositorio no identifica necesariamente su función, responsables ni relaciones de negocio. SAR se centra en **estructurar y validar información conocida**, haciendo visibles las lagunas e inconsistencias de los registros existentes.
 
----
+## Instalación y primer uso
 
-## Validación dinámica (LOOKUPS & RULES)
-SAR utiliza un enfoque dinámico y basado en convención para validar datos y aplicar reglas.
+**Requisitos:** Python 3.10 o posterior y las dependencias del proyecto. Los siguientes pasos están pensados para una ejecución **local**, desde la carpeta raíz del repositorio.
 
-### LOOKUPS
-La hoja LOOKUPS define valores permitidos para determinados campos mediante:
-- lookup_name
-- lookup_value
-- level (C1–C4 o ALL)
+1. Clona el proyecto y entra en su carpeta:
 
-Regla de funcionamiento:
-- Si existe un lookup_name = X, y existe una columna X en la hoja correspondiente, SAR valida automáticamente sus valores.
+   ```powershell
+   git clone https://github.com/begobe1978/security-application-registry.git
+   cd security-application-registry
+   ```
 
-No existen mappings hardcodeados entre campos y lookups.
-La validación se activa únicamente por coincidencia de nombre (lookup_name == column_name).
+2. Instala la aplicación:
 
-Si un lookup está definido pero la columna no existe en la hoja correspondiente, se genera una ISSUE de configuración, pero el sistema no falla.
+   ```powershell
+   python -m pip install -e .
+   ```
 
-### RULES
-La hoja RULES permite definir reglas declarativas por nivel (C1–C4).
-- Las reglas se aplican dinámicamente.
-- Si una regla referencia un campo que no existe, se genera una ISSUE de configuración.
-- Las reglas nunca provocan fallos estructurales del motor.
+3. Crea un usuario local. Elige el rol `admin` para poder crear un inventario a partir de la plantilla:
 
-### Validaciones Core
-Independientemente de LOOKUPS y RULES, SAR aplica siempre validaciones estructurales mínimas:
-- id
-- status
-- name
-- referencias jerárquicas (c1_id, c2_id, c3_id)
-- coherencia del modelo C1 → C2 → C3 → C4
+   ```powershell
+   python scripts/create_user.py
+   ```
 
-Estas validaciones son prioritarias y no dependen del contenido dinámico del Excel.
+   Las credenciales se guardan localmente en `data/users.yml`, que está excluido de Git. **No publiques este archivo.**
 
-### Campos especiales
-Algunos campos pueden tener lógica derivada (por ejemplo vulnerabilities_detected).
-Si estos campos no existen en el modelo, SAR genera una ISSUE informativa y omite su cálculo.
+4. Configura una clave de sesión para este proceso y las cookies para HTTP local, y arranca el servidor:
 
----
-## Requisitos
+   ```powershell
+   $env:SECRET_KEY = python -c "import secrets; print(secrets.token_urlsafe(48))"
+   $env:SAR_COOKIE_SECURE = "false"
+   python -m uvicorn sar.app:app --host 127.0.0.1 --port 8000
+   ```
 
-- Python **3.10+**
-- Dependencias en `requirements.txt`
+5. Abre **http://127.0.0.1:8000**, inicia sesión y utiliza la opción de **crear un registro desde la plantilla**. La plantilla incluida es `data/registry_template.xlsx`.
 
----
+La clave del ejemplo es válida mientras dure esa sesión del servidor: al reiniciarlo con otra clave, las sesiones anteriores dejan de ser válidas. Para un despliegue persistente debe configurarse una clave estable y secreta.
 
-## Instalación
+**Windows:** también existe `run_sar.bat` para facilitar el arranque. Para el primer uso se recomienda seguir los comandos anteriores porque dejan explícita la configuración local.
 
-```bash
-pip install -e .
+**Otros sistemas:** los comandos de instalación y `uvicorn` son equivalentes, pero la asignación de variables de entorno depende de la shell utilizada.
+
+## Cómo se organiza el Excel
+
+El libro contiene las hojas estructurales `C1`, `C2`, `C3` y `C4`, junto con:
+
+- **`META`:** metadatos del inventario y etiquetas de presentación.
+- **`LOOKUPS`:** conjuntos de valores admitidos por campo y nivel.
+- **`RULES`:** reglas de validación declarativas.
+
+Los identificadores (`id`) y referencias (`c1_id`, `c2_id`, `c3_id`) mantienen la integridad de las relaciones. Las validaciones esenciales del modelo no dependen de la configuración de `LOOKUPS` o `RULES`.
+
+Una incidencia señala un dato que conviene revisar; **no equivale automáticamente a una vulnerabilidad confirmada**. El valor de la información resultante depende de la calidad y actualización del inventario.
+
+Para más detalle técnico, consulta [los principios de diseño](docs/design.md).
+
+## Alcance y condiciones de uso
+
+SAR es una aplicación funcional de **alcance deliberadamente acotado**. Su objetivo es proporcionar un inventario trazable, editable y validable, no ofrecer todas las capacidades de una plataforma empresarial.
+
+- **Despliegue:** pensado inicialmente para ejecución local o en un entorno controlado. No se presenta como un servicio multiusuario endurecido para Internet.
+- **Concurrencia:** el libro Excel y el estado activo de la aplicación no están diseñados como un backend de edición simultánea independiente por usuario. Evita operar con varios procesos o editores concurrentes sobre el mismo inventario.
+- **Acceso a la red:** para uso local, inicia el servidor en `127.0.0.1`. Exponerlo en otras interfaces o redes requiere evaluar autenticación, TLS, acceso a archivos, almacenamiento y operación segura.
+- **Datos:** no introduzcas secretos en el inventario ni publiques libros con información interna o personal. Mantén copias de seguridad y controla quién puede acceder a ellas.
+- **Cobertura:** SAR no descubre automáticamente los activos no registrados. La completitud del inventario depende de los datos facilitados y de su mantenimiento.
+
+Posibles líneas de evolución, **sin constituir compromisos ni requisitos para el alcance actual**, incluyen la sincronización con fuentes externas, relaciones transversales entre sistemas y mecanismos específicos para operación concurrente.
+
+## Desarrollo y pruebas
+
+Para instalar las dependencias de desarrollo y ejecutar las pruebas:
+
+```powershell
+python -m pip install -e ".[dev]"
+python -m pytest -q
 ```
 
----
+La existencia de pruebas automatizadas no sustituye la validación del despliegue concreto ni garantiza ausencia de defectos.
 
-## Ejecución
+## Licencia y autoría
 
-```bash
-uvicorn sar.app:app --reload
-```
+Publicado bajo la **GNU Affero General Public License v3.0 (AGPLv3)**. Consulta [LICENSE](LICENSE).
 
-Abrir: http://localhost:8000
-
----
-
-## Licencia
-
-Este proyecto se publica bajo **GNU Affero General Public License v3.0 (AGPLv3)**.
-
-© **2026** — **Bernardo Gómez Bey**
+Proyecto creado y mantenido por **Bernardo Gómez Bey**.
