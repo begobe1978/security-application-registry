@@ -1,0 +1,298 @@
+<!--
+  Copyright (C) 2026 Bernardo Gómez Bey
+  SPDX-License-Identifier: AGPL-3.0-or-later
+-->
+
+{% extends "base.html" %}
+{% block content %}
+<!-- record.html -->
+<div class="card">
+  <div style="display:flex; justify-content:space-between; gap:14px; flex-wrap:wrap;">
+    <div>
+      <h2 class="title">Ficha {{ level_labels.get(level, level) }} — <span style="font-family:var(--mono)">{{ id }}</span></h2>
+      <p class="subtitle">Origen: <b>{{ sheet }}</b> · Excel: <span style="font-family:var(--mono)">{{ path }}</span></p>
+    </div>
+
+    <div style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;">
+      <form method="post" action="/deprecate/{{ id }}">
+        <input type="hidden" name="{{ csrf_field_name }}" value="{{ csrf_token }}">
+        <button class="btn btn-danger" type="submit">Deprecar</button>
+      </form>
+
+      <!-- Context navigation (lists by level) -->
+      <a class="btn btn-ghost" href="/level/{{ level }}">Ver lista {{ level }}</a>
+      {% if parent_ref %}
+        <a class="btn btn-ghost" href="/level/{{ level }}?parent={{ parent_ref }}">Ver hermanos</a>
+      {% endif %}
+      {% if level == "C1" %}
+        <a class="btn btn-ghost" href="/level/C2?parent={{ id }}">Ver {{ level_labels.get("C2","C2") }} de {{ level_labels.get("C1","C1") }}</a>
+      {% elif level == "C2" %}
+        <a class="btn btn-ghost" href="/level/C3?parent={{ id }}">Ver {{ level_labels.get("C3","C3") }} de {{ level_labels.get("C2","C2") }}</a>
+      {% elif level == "C3" %}
+        <a class="btn btn-ghost" href="/level/C4?parent={{ id }}">Ver {{ level_labels.get("C4","C4") }} de {{ level_labels.get("C3","C3") }}</a>
+      {% endif %}
+
+      {% if level == "C4" %}
+        <a class="btn btn-primary" href="/report/c4/{{ id }}.docx">Informe Word</a>
+        <a class="btn btn-secondary" href="/report/c4/{{ id }}.html">Informe HTML</a>
+      {% endif %}
+      {% if level == "C1" %}
+        <a class="btn btn-primary" href="/create/C2?parent={{ id }}">Alta {{ level_labels.get("C2","C2") }}</a>
+      {% elif level == "C2" %}
+        <a class="btn btn-primary" href="/create/C3?parent={{ id }}">Alta {{ level_labels.get("C3","C3") }}</a>
+      {% elif level == "C3" %}
+        <a class="btn btn-primary" href="/create/C4?parent={{ id }}">Alta {{ level_labels.get("C4","C4") }}</a>
+      {% endif %}
+
+
+      <a class="btn btn-secondary" href="/view-full">Volver a Full View</a>
+      <a class="btn btn-secondary" href="/issues">Ver Issues</a>
+    </div>
+  </div>
+</div>
+
+{% if last_error %}
+<div class="errorbox" style="margin-top:12px;"><strong>Error:</strong> {{ last_error }}</div>
+{% endif %}
+
+<br>
+
+<div class="grid grid-3">
+  <div class="card">
+    <div class="title" style="font-size:14px;">Relaciones</div>
+
+    {% if parent_ref %}
+      <div class="muted">Parent</div>
+      <div style="margin:6px 0 12px 0;">
+        <a class="btn btn-ghost" href="/record/{{ parent_ref }}" style="font-family:var(--mono)">{{ parent_ref }}</a>
+      </div>
+    {% else %}
+      <div class="muted">Parent</div>
+      <div style="margin:6px 0 12px 0;">—</div>
+    {% endif %}
+
+    <div class="muted">Hijos inmediatos</div>
+    {% if children|length == 0 %}
+      <div style="margin-top:6px;">—</div>
+    {% else %}
+      <div style="margin-top:8px; display:flex; flex-direction:column; gap:8px;">
+        {% for c in children %}
+          <a class="btn btn-ghost" href="/record/{{ c.id }}" style="justify-content:space-between;">
+            <span style="font-family:var(--mono)">{{ c.id }}</span>
+            <span class="muted">{{ c.level }}</span>
+          </a>
+        {% endfor %}
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <div class="title" style="font-size:14px;">Resumen</div>
+    <div class="muted">Descendientes</div>
+
+    <div style="margin-top:10px; display:grid; gap:10px;">
+      <div class="kpi">
+        <div style="display:flex; justify-content:space-between; align-items:baseline;">
+          <div class="muted" style="font-weight:900;">{{ level_labels.get("C2","C2") }}</div>
+          <div style="font-weight:900;">{{ desc_counts["C2"] }}</div>
+        </div>
+      </div>
+      <div class="kpi">
+        <div style="display:flex; justify-content:space-between; align-items:baseline;">
+          <div class="muted" style="font-weight:900;">{{ level_labels.get("C3","C3") }}</div>
+          <div style="font-weight:900;">{{ desc_counts["C3"] }}</div>
+        </div>
+      </div>
+      <div class="kpi">
+        <div style="display:flex; justify-content:space-between; align-items:baseline;">
+          <div class="muted" style="font-weight:900;">{{ level_labels.get("C4","C4") }}</div>
+          <div style="font-weight:900;">{{ desc_counts["C4"] }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="title" style="font-size:14px;">Issues relacionados</div>
+    {% if issues|length == 0 %}
+      <div class="muted">No hay issues para este elemento (ni como parent_ref).</div>
+    {% else %}
+      <div style="margin-top:10px; display:grid; gap:10px;">
+        {% for i in issues %}
+          <div style="border:1px solid var(--border); border-radius:12px; padding:10px; background:rgba(255,255,255,.65);">
+            <div style="display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; align-items:center;">
+              <div style="display:flex; gap:8px; align-items:center;">
+                {% if i["severity"]=="error" %}
+                  <span class="badge b-error">ERROR</span>
+                {% elif i["severity"]=="warning" %}
+                  <span class="badge b-warning">WARNING</span>
+                {% else %}
+                  <span class="badge b-info">INFO</span>
+                {% endif %}
+                <span class="badge">{{ i["level"] }}</span>
+                <span class="badge">{{ i["issue_type"] }}</span>
+              </div>
+              <div class="muted" style="font-family:var(--mono); font-size:12px;">
+                {{ i["id"] }}{% if i["parent_ref"] %} ← {{ i["parent_ref"] }}{% endif %}
+              </div>
+            </div>
+            <div style="margin-top:8px;">{{ i["message"] }}</div>
+            {% if i["suggested_fix"] %}
+              <div class="muted" style="margin-top:6px;"><b>Fix:</b> {{ i["suggested_fix"] }}</div>
+            {% endif %}
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  </div>
+</div>
+
+<br>
+
+<div class="card" id="diagram">
+  <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
+    <div>
+      <div class="title" style="font-size:14px;">Diagrama de relaciones</div>
+      <div class="muted" style="font-size:12px; margin-top:4px;">
+        Vista automática (Mermaid) de la relación entre este elemento y sus padres/hijos.
+      </div>
+    </div>
+    <a class="btn btn-secondary" href="#diagram">Ver</a>
+  </div>
+
+  <br>
+
+  {% if diagram_meta and diagram_meta.get('truncated') %}
+    <div class="alert" style="margin-bottom:10px;">
+      ⚠️ <b>Diagrama truncado</b>: se alcanzó el límite de {{ diagram_meta.get('max_nodes') }} nodos.
+      Puedes ampliar el límite con <span style="font-family:var(--mono)">?max_nodes=500</span> (ojo: puede ir lento).
+    </div>
+  {% endif %}
+
+  {% if mermaid_code %}
+    <div class="table-wrap" style="padding:8px; max-height:70vh;">
+      <div class="mermaid">{{ mermaid_code | safe }}</div>
+    </div>
+  {% else %}
+    <div class="muted" style="font-size:12px;">
+      {{ mermaid_error or "(Diagrama no disponible)" }}
+    </div>
+  {% endif %}
+
+  <details style="margin-top:12px;">
+    <summary class="muted" style="cursor:pointer; font-size:12px;">Mostrar código Mermaid</summary>
+    <pre style="white-space:pre-wrap; font-size:12px; padding:10px; border:1px solid var(--border); border-radius:10px; background:#fff; overflow:auto;">{{ mermaid_code }}</pre>
+  </details>
+</div>
+
+<br>
+
+<div class="card">
+  <div class="title" style="font-size:14px;">Datos del registro</div>
+  <div class="muted">
+    Valores tal como están en la pestaña <b>{{ sheet }}</b>.
+    Puedes editar campos existentes directamente aquí (y guardar).
+  </div>
+  <br>
+
+  <form method="post" action="/record/{{ id }}/edit">
+    <input type="hidden" name="{{ csrf_field_name }}" value="{{ csrf_token }}">
+    <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:10px;">
+      <span class="muted" style="font-size:12px;">
+        (Solo se actualizan columnas existentes. El <span style="font-family:var(--mono)">id</span> no es editable.)
+      </span>
+      <button class="btn btn-primary" type="submit" style="margin-left:auto;">Guardar cambios</button>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>field</th>
+            <th>value</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for k, v in record.items() %}
+            <tr class="{% if k in editable_fields %}row-editable{% else %}row-readonly{% endif %}">
+              <td style="font-family:var(--mono); color:var(--muted)">
+                {{ k }}
+                {% if k == "vulnerabilities_detected" and (k not in editable_fields) %}
+                  <span class="pill" style="margin-left:6px;">heredado</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if k in editable_fields %}
+                  {% if parent_col and k == parent_col %}
+                    <div class="ac" data-ac="1" data-child-level="{{ level }}">
+                      <input class="input-editable" name="{{ k }}" value="{{ v|e }}" placeholder="Buscar {{ k }}…" autocomplete="off" data-ac-input="1" />
+                      <div class="ac-results" data-ac-results="1" style="display:none;"></div>
+                      <div class="muted" style="font-size:11px; margin-top:6px;">
+                        Escribe para buscar (por ID o nombre) y selecciona una opción.
+                      </div>
+                    </div>
+                  {% elif lookups.get(k) %}
+                    {% set cur = (v|string) %}
+                    <select class="input-editable" name="{{ k }}">
+                      <option value="">—</option>
+                      {# Keep current value visible even if it's not in LOOKUPS #}
+                      {% if cur and (lookups.get(k) | map(attribute='value') | list) and (cur not in (lookups.get(k) | map(attribute='value') | list)) %}
+                        <option value="{{ cur|e }}" selected>{{ cur|e }} — (actual)</option>
+                      {% endif %}
+                      {% for opt in lookups.get(k, []) %}
+                        <option value="{{ opt.value }}" {% if cur == opt.value %}selected{% endif %}>{{ opt.value }}{% if opt.label and opt.label != opt.value %} — {{ opt.label }}{% endif %}</option>
+                      {% endfor %}
+                    </select>
+                  {% else %}
+                    <input class="input-editable" name="{{ k }}" value="{{ v|e }}" />
+                  {% endif %}
+                {% else %}
+                  <input class="input-readonly" value="{{ v|e }}" disabled />
+                  {% if k == "vulnerabilities_detected" %}
+                    <div class="muted" style="font-size:11px; margin-top:6px;">
+                      Se calcula automáticamente a partir de {{ level_labels.get("C3","C3") }}/{{ level_labels.get("C4","C4") }}.
+                    </div>
+                  {% endif %}
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </form>
+</div>
+
+<br>
+
+<div class="card">
+  <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-end; flex-wrap:wrap;">
+    <div>
+      <div class="title" style="font-size:14px;">Añadir campo nuevo</div>
+      <div class="muted" style="font-size:12px;">
+        Esta acción crea una <b>nueva columna</b> en el Excel. Se confirmará en un segundo paso.
+        Si el campo ya existe, se devolverá error.
+      </div>
+    </div>
+  </div>
+
+  <form method="post" action="/record/{{ id }}/add-field/preview" style="margin-top:12px;">
+    <input type="hidden" name="{{ csrf_field_name }}" value="{{ csrf_token }}">
+    <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
+      <div style="min-width:220px; flex:1;">
+        <label class="muted" style="font-size:12px;">Nombre del campo</label>
+        <input class="input" name="field_name" placeholder="e.g. data_classification" required />
+      </div>
+
+      <div style="min-width:220px; flex:2;">
+        <label class="muted" style="font-size:12px;">Valor inicial</label>
+        <input class="input" name="value" placeholder="valor para este registro" />
+      </div>
+
+      <button class="btn btn-primary" type="submit" style="margin-left:auto;">Continuar</button>
+    </div>
+  </form>
+</div>
+
+
+{% endblock %}

@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+build/
+dist/
+
+# Virtual environments
+.venv/
+venv/
+
+# Local credentials and configuration
+data/users.yml
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Local registry data
+data/*Registry.xlsx
+data/registry_*.xlsx
+registry.xlsx
+registry_big.xlsx
+
+# Editors and operating systems
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+# Keep the public empty registry template
+!data/registry_template.xlsx

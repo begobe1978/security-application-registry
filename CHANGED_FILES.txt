@@ -1,0 +1,10 @@
+src/sar/app.py
+src/sar/permissions.py
+src/sar/templates/add_field_confirm.html
+src/sar/templates/base.html
+src/sar/templates/create_confirm.html
+src/sar/templates/create_form.html
+src/sar/templates/index.html
+src/sar/templates/login.html
+src/sar/templates/record.html
+tests/test_security_hardening.py
